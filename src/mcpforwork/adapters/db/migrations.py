@@ -27,12 +27,69 @@ from typing import Any
 _SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 _PG_DIR = Path(__file__).parent / "pg"
 
-# The version the base schema establishes. Each entry in MIGRATIONS bumps this.
-SCHEMA_VERSION = 1
+# The version the base schema establishes plus each migration. Bumped as
+# MIGRATIONS grows.
+SCHEMA_VERSION = 2
 
 # version -> SQLite SQL script, applied in ascending order above the database's
-# current `PRAGMA user_version`. Empty until S1.3 adds the profiles tables.
-MIGRATIONS: dict[int, str] = {}
+# current `PRAGMA user_version`.
+_PROFILES_SQLITE = """
+CREATE TABLE profiles (
+  id                   INTEGER PRIMARY KEY,
+  user_id              INTEGER NOT NULL REFERENCES users(id),
+  label                TEXT NOT NULL DEFAULT 'default',
+  is_active            INTEGER NOT NULL DEFAULT 1,
+  full_name            TEXT,
+  contact_email        TEXT,
+  country              TEXT,
+  city                 TEXT,
+  work_auth_countries  TEXT,   -- JSON list
+  needs_sponsorship    INTEGER,
+  target_titles        TEXT,   -- JSON list (1-5)
+  sectors              TEXT,   -- JSON list
+  seniority            TEXT,
+  employment_types     TEXT,   -- JSON list
+  work_modes           TEXT,   -- JSON list
+  relocation           INTEGER,
+  min_salary_amount    INTEGER,
+  min_salary_currency  TEXT,
+  min_salary_period    TEXT,
+  languages            TEXT,   -- JSON list
+  cv_text              TEXT,
+  links                TEXT,   -- JSON dict
+  availability_date    TEXT,
+  notice_period        TEXT,
+  deal_breakers        TEXT,   -- JSON
+  career_narrative     TEXT,
+  salary_public_amount INTEGER,
+  salary_public_currency TEXT,
+  negotiation_floor    INTEGER,
+  created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX idx_profiles_user ON profiles(user_id);
+
+CREATE TABLE achievements (
+  id         INTEGER PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  profile_id INTEGER NOT NULL REFERENCES profiles(id),
+  metric     TEXT NOT NULL,
+  context    TEXT,
+  role       TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX idx_achievements_profile ON achievements(profile_id);
+
+CREATE TABLE style_profile (
+  id             INTEGER PRIMARY KEY,
+  user_id        INTEGER NOT NULL REFERENCES users(id),
+  profile_id     INTEGER NOT NULL UNIQUE REFERENCES profiles(id),
+  writing_sample TEXT,
+  directives     TEXT,   -- JSON
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+"""
+
+MIGRATIONS: dict[int, str] = {2: _PROFILES_SQLITE}
 
 # Migrations whose script recreates a table that FK children reference; these
 # run with foreign-key enforcement toggled off around the script.
@@ -42,6 +99,7 @@ _FK_RECREATE_MIGRATIONS: frozenset[int] = frozenset()
 # ordinal is the version here (unlike the donor's legacy offset).
 _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "001_initial.sql": 1,
+    "002_profiles.sql": 2,
 }
 
 
