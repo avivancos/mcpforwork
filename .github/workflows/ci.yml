@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install environment
+        run: uv sync --locked
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Architecture boundary contracts
+        run: uv run lint-imports
+
+      - name: Consent-verb gate
+        # The consent invariant (AGENTS.md §1.2): submit authorization may only
+        # be constructed inside services/. Any other occurrence fails the build.
+        run: |
+          if grep -RIn --include='*.py' 'submit_authorized' src/ | grep -v 'src/mcpforwork/services/'; then
+            echo "consent gate violated: 'submit_authorized' found outside src/mcpforwork/services/"
+            exit 1
+          fi
+
+      - name: Tests
+        run: uv run pytest
