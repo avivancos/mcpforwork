@@ -39,3 +39,9 @@ decisions had to be fixed before any code existed.
 
 - Hosted free tier (e.g. 25 tracked findings) vs trial-only — decide by S6/S7.
 - PDF rendering: print-CSS only (MVP bias stands) vs server-side later.
+
+## Carried follow-ups (from the S0 final-review gate)
+
+- When Sprint 2 is carded, S2.1 must add the entrypoint-independence
+  import-linter contract ("entrypoints never import each other") — deferred
+  under the rule of two until a second entrypoint exists.

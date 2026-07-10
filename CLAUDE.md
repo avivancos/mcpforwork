@@ -14,9 +14,9 @@ when you change an obligation, mirror it.
 ## Quick contract (the non-negotiables, condensed)
 
 1. **Backlog-first.** Card in `backlog/pending/` → moved to `in_progress/`
-   before touching code. Lifecycle: `pending → in_progress → [TDD] → done →
-   testing → production`. Rules: [backlog/agent_index.md](backlog/agent_index.md).
-   Override only if the user says "ignore the backlog".
+   before touching code. Lifecycle and states: `backlog/agent_index.md §2`
+   (the folder a card sits in IS its state). Override only if the user says
+   "ignore the backlog".
 2. **TDD, ZERO mocks.** Red → green → refactor. Real SQLite at `tmp_path`,
    live Postgres behind `@pytest.mark.live`, `pytest-httpserver` + recorded
    fixtures for HTTP, time/seed injected. Details: `AGENTS.md §4`.

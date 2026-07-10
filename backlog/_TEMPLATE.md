@@ -2,7 +2,6 @@
 
 **Epic:** <epic / area>
 **Estimated effort:** <~X h>
-**State:** pending
 
 ## Goal
 

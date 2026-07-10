@@ -21,7 +21,7 @@ import pytest
 @pytest.fixture
 def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
     """Real SQLite connection on a real file, foreign keys enforced."""
-    connection = sqlite3.connect(tmp_path / "mcpforwork.db", check_same_thread=False)
+    connection = sqlite3.connect(tmp_path / "mcpforwork.db")
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA busy_timeout = 30000")

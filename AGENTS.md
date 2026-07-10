@@ -78,6 +78,10 @@ mapping layers, DI frameworks, ORM/repository-per-aggregate, microservices.
 - Test names state the business rule, not the mechanics.
 - Default run excludes the `live` marker; live + full suites are pre-push
   gates.
+- Mutation testing: no `mutmut` dependency yet. The sanctioned substitute is
+  the manual mutant probe — deliberately break the guarded behavior (remove
+  the PRAGMA, add the forbidden import), observe the check fail, revert, and
+  record both results on the card.
 
 ## 5. Backlog workflow
 

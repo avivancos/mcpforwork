@@ -5,13 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@e0671e8813255a57a0f842cbe1d9d52bbfb9a66c # v5.4
 
       - name: Install environment
         run: uv sync --locked
@@ -28,8 +31,10 @@ jobs:
       - name: Consent-verb gate
         # The consent invariant (AGENTS.md §1.2): submit authorization may only
         # be constructed inside services/. Any other occurrence fails the build.
+        # Exclusion is by directory, not by line content, so a violating line
+        # cannot hide by mentioning the services path in a comment.
         run: |
-          if grep -RIn --include='*.py' 'submit_authorized' src/ | grep -v 'src/mcpforwork/services/'; then
+          if grep -RIn --include='*.py' --exclude-dir=services 'submit_authorized' src/mcpforwork/; then
             echo "consent gate violated: 'submit_authorized' found outside src/mcpforwork/services/"
             exit 1
           fi

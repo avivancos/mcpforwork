@@ -1,6 +1,6 @@
 [project]
 name = "mcpforwork"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Open-source, MCP-first job-search copilot. The LLM is the client; we never operate tokens."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -19,6 +19,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/mcpforwork/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mcpforwork"]
@@ -71,12 +74,19 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "no LLM SDKs in core (zero server-side LLM invariant)"
+name = "no LLM SDKs anywhere in the server (zero server-side LLM invariant)"
 type = "forbidden"
-source_modules = [
-    "mcpforwork.domain",
-    "mcpforwork.services",
-    "mcpforwork.ports",
-    "mcpforwork.packs",
+source_modules = ["mcpforwork"]
+forbidden_modules = [
+    "openai",
+    "anthropic",
+    "litellm",
+    "cohere",
+    "mistralai",
+    "groq",
+    # externals are squashed to their root: "google" covers google.genai and
+    # google.generativeai (we never import google.* directly for anything else)
+    "google",
+    "langchain",
+    "llama_index",
 ]
-forbidden_modules = ["openai", "anthropic"]

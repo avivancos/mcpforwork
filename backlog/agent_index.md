@@ -130,7 +130,6 @@ in English.
 
 **Epic:** <epic / area>
 **Estimated effort:** <~X h>
-**State:** pending | in_progress | done | need_human_testing | testing | production
 
 ## Goal
 <What and why, 2–4 lines. The outcome, not the implementation.>
