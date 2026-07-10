@@ -12,7 +12,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
 
       - uses: astral-sh/setup-uv@e0671e8813255a57a0f842cbe1d9d52bbfb9a66c # v5.4
 
@@ -31,10 +31,11 @@ jobs:
       - name: Consent-verb gate
         # The consent invariant (AGENTS.md §1.2): submit authorization may only
         # be constructed inside services/. Any other occurrence fails the build.
-        # Exclusion is by directory, not by line content, so a violating line
-        # cannot hide by mentioning the services path in a comment.
+        # The exclusion is anchored to the path field at line start, so it
+        # excludes exactly src/mcpforwork/services/ — not nested */services/
+        # dirs, and not lines that merely mention the path in a comment.
         run: |
-          if grep -RIn --include='*.py' --exclude-dir=services 'submit_authorized' src/mcpforwork/; then
+          if grep -RIn --include='*.py' 'submit_authorized' src/mcpforwork/ | grep -v '^src/mcpforwork/services/'; then
             echo "consent gate violated: 'submit_authorized' found outside src/mcpforwork/services/"
             exit 1
           fi
