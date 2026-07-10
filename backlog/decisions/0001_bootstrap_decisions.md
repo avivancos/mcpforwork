@@ -45,3 +45,28 @@ decisions had to be fixed before any code existed.
 - When Sprint 2 is carded, S2.1 must add the entrypoint-independence
   import-linter contract ("entrypoints never import each other") — deferred
   under the rule of two until a second entrypoint exists.
+
+## Carried follow-ups (from the S1 final-review gate)
+
+- **[before any hosted deploy — security P2]** The Postgres `app` role ships
+  with a hardcoded dev/test password (`app_secret`) in
+  `pg/001_initial.sql`. It is the RLS tenant boundary. The hosting/deploy card
+  (S6) MUST provision the role out-of-band with a secret password (the
+  migration's `IF NOT EXISTS` guard means a pre-provisioned role is not
+  clobbered), or make the migration env-var-driven and fail-closed in prod.
+  Rerun security-reviewer then.
+- **[S2 — FK-recreate must preserve RLS]** When S2 FK-recreates
+  `external_applications` to add the `finding_id` FK to `explore_findings`, the
+  recreation drops `ENABLE/FORCE ROW LEVEL SECURITY` + the policy — they MUST be
+  re-added. The new fail-closed live test guards this (it fails if RLS is lost).
+- **[S6.4 — audit_log read access]** `audit_log` is intentionally not
+  FORCE-RLS'd and now stores per-tenant data (applied URLs). Before any read
+  path over it ships, scope it by `user_id` or add a read-side RLS policy.
+- **[hosting/pool card — session-GUC footgun]** `set_user_context` uses a
+  session-scoped GUC, correct for the fresh-per-request-connection model. If
+  connection pooling is introduced, enforce reset-on-checkout and add a test
+  proving a recycled connection fails closed.
+- **[note, no action]** timestamp columns are TIMESTAMP on PG / TEXT on SQLite
+  (no consumer reads them back yet); `_pg_statements` does not track
+  single-quoted literals (no current migration triggers it). Revisit if a
+  consumer/literal appears.

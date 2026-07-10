@@ -168,6 +168,18 @@ def test_export_for_brief_includes_salary_only_with_consent(uow: SqlUnitOfWork) 
     assert disclosed["min_salary_currency"] == "GBP"
 
 
+def test_cannot_add_achievements_to_another_users_profile(uow: SqlUnitOfWork) -> None:
+    alice = _make_user(uow, "alice@example.com")
+    bob = _make_user(uow, "bob@example.com")
+    alice_pid = profiles.create_profile(uow, alice, {})
+    uow.commit()
+    # Bob cannot stamp a child row onto Alice's profile.
+    with pytest.raises(ProfileValidationError):
+        profiles.add_achievements(uow, bob, alice_pid, [{"metric": "sneaky"}])
+    with pytest.raises(ProfileValidationError):
+        profiles.set_style_profile(uow, bob, alice_pid, "sneaky sample")
+
+
 def test_a_user_cannot_read_another_users_profile(uow: SqlUnitOfWork) -> None:
     alice = _make_user(uow, "alice@example.com")
     bob = _make_user(uow, "bob@example.com")

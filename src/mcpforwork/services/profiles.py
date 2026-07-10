@@ -28,6 +28,16 @@ def _deserialize(row: Row) -> Row:
     return out
 
 
+def _require_owned_profile(uow: UnitOfWork, user_id: int, profile_id: int) -> None:
+    """Reject writes targeting a profile the user does not own — so a child row
+    (achievement, style) can never be stamped onto a foreign profile."""
+    if (
+        uow.fetchone("SELECT id FROM profiles WHERE id = ? AND user_id = ?", (profile_id, user_id))
+        is None
+    ):
+        raise domain.ProfileValidationError(f"profile {profile_id} not found for this user")
+
+
 def create_profile(
     uow: UnitOfWork,
     user_id: int,
@@ -104,6 +114,7 @@ def add_achievements(
     uow: UnitOfWork, user_id: int, profile_id: int, items: Sequence[Mapping[str, Any]]
 ) -> list[int]:
     """Append quantified wins to the achievements bank; returns the new ids."""
+    _require_owned_profile(uow, user_id, profile_id)
     ids: list[int] = []
     for item in items:
         if not item.get("metric"):
@@ -133,6 +144,7 @@ def set_style_profile(
     directives: Mapping[str, Any] | None = None,
 ) -> None:
     """Upsert the profile's style profile (one per profile)."""
+    _require_owned_profile(uow, user_id, profile_id)
     encoded = json.dumps(directives) if directives is not None else None
     existing = uow.fetchone(
         "SELECT id FROM style_profile WHERE user_id = ? AND profile_id = ?",
@@ -179,6 +191,10 @@ def export_for_brief(
     if facts is None:
         return None
     if not disclose_salary:
+        # Only the minimum-salary deal-breaker is classified never-disclose by
+        # the intake model. salary_public_* and negotiation_floor are
+        # offer-stage figures the candidate opted to share, so they pass
+        # through. EEO would be gated here too once it is stored (deferred).
         for field in domain.PRIVATE_SALARY_FIELDS:
             facts.pop(field, None)
     return facts

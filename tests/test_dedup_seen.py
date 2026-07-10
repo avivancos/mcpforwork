@@ -18,6 +18,30 @@ def test_unseen_url_is_recommended_new(uow: SqlUnitOfWork) -> None:
     assert result["items"][0]["seen"] is False
 
 
+def test_check_seen_ignores_blank_and_whitespace_urls_in_a_batch(uow: SqlUnitOfWork) -> None:
+    user_id = _make_user(uow, "u@example.com")
+    result = dedup.check_seen(
+        uow, user_id, ["https://example.com/jobs/77", "", "   ", "https://example.com/jobs/88"]
+    )
+    # Only the two non-blank URLs are accounted for.
+    assert result["checked"] == 2
+    assert result["new_count"] == 2
+    assert [i["url"] for i in result["items"]] == [
+        "https://example.com/jobs/77",
+        "https://example.com/jobs/88",
+    ]
+
+
+def test_check_seen_reports_each_occurrence_of_a_duplicated_url(uow: SqlUnitOfWork) -> None:
+    user_id = _make_user(uow, "u@example.com")
+    result = dedup.check_seen(
+        uow, user_id, ["https://example.com/jobs/77", "https://example.com/jobs/77"]
+    )
+    # Same URL twice in one batch yields two stable items, both "new".
+    assert result["checked"] == 2
+    assert [i["recommendation"] for i in result["items"]] == ["new", "new"]
+
+
 def test_recorded_application_is_then_seen_and_skipped(uow: SqlUnitOfWork) -> None:
     user_id = _make_user(uow, "u@example.com")
     dedup.record_application(uow, user_id, url="https://example.com/jobs/77", channel="email")

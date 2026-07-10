@@ -36,14 +36,19 @@ def test_profile_created_by_one_tenant_is_invisible_to_another(two_users) -> Non
     bob = pg_support.app_connect()
     try:
         alice.set_user_context(1)
-        profiles.create_profile(alice, 1, {"full_name": "Alice"})
+        # Include a JSON list field to exercise (de)serialization on Postgres.
+        profiles.create_profile(
+            alice, 1, {"full_name": "Alice", "target_titles": ["Backend Engineer"]}
+        )
         alice.commit()
 
         bob.set_user_context(2)
         assert profiles.list_profiles(bob, 2) == []
 
         alice.set_user_context(1)
-        assert profiles.get_profile(alice, 1)["full_name"] == "Alice"
+        got = profiles.get_profile(alice, 1)
+        assert got["full_name"] == "Alice"
+        assert got["target_titles"] == ["Backend Engineer"]
     finally:
         alice.close()
         bob.close()
