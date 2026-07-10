@@ -1,0 +1,82 @@
+[project]
+name = "mcpforwork"
+version = "0.1.0"
+description = "Open-source, MCP-first job-search copilot. The LLM is the client; we never operate tokens."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Agustin Vivancos", email = "agusvc@gmail.com" }]
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-httpserver>=1.1",
+    "ruff>=0.8",
+    "import-linter>=2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcpforwork"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = [
+    "live: requires real external services (local Postgres via Docker, network)",
+]
+
+[tool.importlinter]
+root_packages = ["mcpforwork"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "domain is pure: imports no other layer"
+type = "forbidden"
+source_modules = ["mcpforwork.domain"]
+forbidden_modules = [
+    "mcpforwork.services",
+    "mcpforwork.ports",
+    "mcpforwork.adapters",
+    "mcpforwork.entrypoints",
+    "mcpforwork.packs",
+]
+
+[[tool.importlinter.contracts]]
+name = "services never import driven or driving sides"
+type = "forbidden"
+source_modules = ["mcpforwork.services"]
+forbidden_modules = ["mcpforwork.adapters", "mcpforwork.entrypoints"]
+
+[[tool.importlinter.contracts]]
+name = "ports are pure seams"
+type = "forbidden"
+source_modules = ["mcpforwork.ports"]
+forbidden_modules = [
+    "mcpforwork.services",
+    "mcpforwork.adapters",
+    "mcpforwork.entrypoints",
+]
+
+[[tool.importlinter.contracts]]
+name = "no LLM SDKs in core (zero server-side LLM invariant)"
+type = "forbidden"
+source_modules = [
+    "mcpforwork.domain",
+    "mcpforwork.services",
+    "mcpforwork.ports",
+    "mcpforwork.packs",
+]
+forbidden_modules = ["openai", "anthropic"]
