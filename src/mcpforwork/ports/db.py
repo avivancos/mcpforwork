@@ -33,8 +33,10 @@ class UnitOfWork(Protocol):
 
     def fetchall(self, sql: str, params: Sequence[Any] = ()) -> list[Row]: ...
 
-    def last_insert_id(self, cur: Any) -> int:
-        """The id of the row just inserted via ``cur``."""
+    def insert(self, sql: str, params: Sequence[Any] = ()) -> int:
+        """Run an INSERT and return the new row's ``id``, uniform across
+        backends (SQLite ``lastrowid``; Postgres ``RETURNING id``). The table's
+        surrogate key must be named ``id``."""
 
     def set_user_context(self, user_id: int) -> None:
         """Bind the tenant for Postgres row-level security; a no-op on SQLite."""

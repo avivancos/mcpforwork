@@ -8,12 +8,18 @@ license = "Apache-2.0"
 authors = [{ name = "Agustin Vivancos", email = "agusvc@gmail.com" }]
 dependencies = []
 
+[project.optional-dependencies]
+# Hosted-only. SQLite self-host installs stay driver-free; the db adapter
+# lazy-imports psycopg and raises a clear error if the extra is missing.
+postgres = ["psycopg[binary]>=3.1"]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
     "pytest-httpserver>=1.1",
     "ruff>=0.8",
     "import-linter>=2",
+    "psycopg[binary]>=3.1",
 ]
 
 [build-system]

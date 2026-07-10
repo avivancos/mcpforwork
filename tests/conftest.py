@@ -37,15 +37,47 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 @pytest.fixture
 def uow(tmp_path: Path) -> Iterator["object"]:
-    """A migrated UnitOfWork on a real SQLite file — the seam services take.
-
-    S1.2 parametrizes this over sqlite and (live) postgres; today it is
-    SQLite-only. Imported lazily so the fixture module has no import-time
-    dependency on the adapter before S1.1's code exists.
-    """
+    """A migrated UnitOfWork on a real SQLite file — the seam services take."""
     from mcpforwork.adapters.db import connect
 
     unit = connect(f"sqlite:///{tmp_path / 'mcpforwork.db'}")
+    try:
+        yield unit
+    finally:
+        unit.close()
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("sqlite", id="sqlite"),
+        pytest.param("postgres", marks=pytest.mark.live, id="postgres"),
+    ]
+)
+def any_uow(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator["object"]:
+    """A migrated UnitOfWork on each backend — the parity matrix.
+
+    SQLite always; Postgres only under ``-m live`` with ``TEST_POSTGRES_URL``
+    set (a real local instance). The Postgres arm connects as the migrating
+    superuser (users/audit_log are not RLS-forced) and starts each test from a
+    truncated schema.
+    """
+    from mcpforwork.adapters.db import connect
+
+    if request.param == "sqlite":
+        unit = connect(f"sqlite:///{tmp_path / 'parity.db'}")
+        try:
+            yield unit
+        finally:
+            unit.close()
+        return
+
+    import pg_support
+
+    if not pg_support.admin_url():
+        pytest.skip("TEST_POSTGRES_URL not set")
+    unit = pg_support.admin_connect()
+    unit.execute("TRUNCATE audit_log, users RESTART IDENTITY CASCADE")
+    unit.commit()
     try:
         yield unit
     finally:
