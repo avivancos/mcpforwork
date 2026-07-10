@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -89,7 +89,30 @@ CREATE TABLE style_profile (
 );
 """
 
-MIGRATIONS: dict[int, str] = {2: _PROFILES_SQLITE}
+# external_applications: hand/external applies (LinkedIn Easy Apply,
+# apply-by-email, web forms) outside any ATS pipeline. UNIQUE(user_id,
+# dedup_hash) makes record_application idempotent. finding_id is a plain column
+# now (no FK) — the FK to explore_findings is added in S2 when that table
+# exists, via the FK-recreate migration pattern.
+_EXTERNAL_APPS_SQLITE = """
+CREATE TABLE external_applications (
+  id           INTEGER PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  finding_id   INTEGER,
+  url          TEXT,
+  company_name TEXT,
+  title        TEXT,
+  channel      TEXT NOT NULL,
+  method       TEXT,
+  dedup_hash   TEXT NOT NULL,
+  applied_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  notes        TEXT,
+  UNIQUE(user_id, dedup_hash)
+);
+CREATE INDEX idx_extapp_user ON external_applications(user_id);
+"""
+
+MIGRATIONS: dict[int, str] = {2: _PROFILES_SQLITE, 3: _EXTERNAL_APPS_SQLITE}
 
 # Migrations whose script recreates a table that FK children reference; these
 # run with foreign-key enforcement toggled off around the script.
@@ -100,6 +123,7 @@ _FK_RECREATE_MIGRATIONS: frozenset[int] = frozenset()
 _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "001_initial.sql": 1,
     "002_profiles.sql": 2,
+    "003_external_applications.sql": 3,
 }
 
 
