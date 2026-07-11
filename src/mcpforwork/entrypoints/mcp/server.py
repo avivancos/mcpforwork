@@ -523,6 +523,15 @@ def record_application(url: str, channel: str = "", method: str = "", notes: str
 
 
 @mcp.tool()
+def profile_gaps() -> str:
+    """What the profile is still missing (required first, then progressive).
+    Offer ONE gap at a time when contextually useful — never a form-wall."""
+    with _tenant_uow() as (uow, user_id):
+        gaps = profiles.profile_gaps(uow, user_id)
+    return _ok("profile_gaps", {"count": len(gaps), "gaps": gaps})
+
+
+@mcp.tool()
 def parse_cv(cv_text: str) -> str:
     """Zero-LLM regex extraction of contact fields from pasted CV text. Returns
     candidate fields (None = unknown — ask the human, never invent). Does NOT
@@ -542,8 +551,11 @@ def setup_session() -> str:
         "2. Persist with update_profile (one call with the whole patch). For a "
         "LinkedIn/GitHub/portfolio URL: open it in the user's browser, extract "
         "structured fields, and call import_from_url_findings(url, fields).\n"
-        "3. Offer Tier 2 progressively: add_achievements (quantified wins - the "
-        "highest-leverage input) and set_style_profile (a writing sample).\n"
+        "3. For pasted CV text call parse_cv first (zero-LLM extraction), CONFIRM "
+        "the fields with the user, then persist.\n"
+        "4. Offer Tier 2 progressively: call profile_gaps and raise ONE gap at a "
+        "time when contextually useful (add_achievements is the highest-leverage "
+        "input; set_style_profile captures the voice). Never a form-wall.\n"
         "Never invent values; only persist what the user actually said."
     )
 

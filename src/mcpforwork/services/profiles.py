@@ -176,6 +176,47 @@ def get_style_profile(uow: UnitOfWork, user_id: int, profile_id: int) -> Row | N
     return out
 
 
+# Progressive-profiling catalogue: (field, tier, why it matters). Tier 1 =
+# required intake; tier 2 = each unlock measurably improves output.
+_GAP_CATALOGUE: tuple[tuple[str, int, str], ...] = (
+    ("full_name", 1, "identity on every asset and application"),
+    ("contact_email", 1, "identity on every asset and application"),
+    ("country", 1, "market selection and legal context"),
+    ("work_auth_countries", 1, "the #1 hard filter on both sides"),
+    ("target_titles", 1, "drives source selection and scoring"),
+    ("sectors", 1, "drives source selection and scoring"),
+    ("seniority", 1, "filtering and tone of materials"),
+    ("employment_types", 1, "different markets entirely"),
+    ("work_modes", 1, "hard filter"),
+    ("languages", 1, "filters postings and sets asset language"),
+    ("cv_text", 1, "seeds the whole profile"),
+    ("achievements", 2, "quantified wins — the single highest-leverage input"),
+    ("style_profile", 2, "drafts sound like YOU, not like AI"),
+    ("links", 2, "profile enrichment from LinkedIn/GitHub/portfolio"),
+    ("deal_breakers", 2, "veto filters and honest fit scoring"),
+    ("availability_date", 2, "form answers and recruiter replies"),
+)
+
+
+def profile_gaps(uow: UnitOfWork, user_id: int) -> list[Row]:
+    """Missing fields, required (tier 1) first — the progressive /setup data.
+    The client offers ONE gap at a time when contextually useful."""
+    prof = get_profile(uow, user_id)
+    if prof is None:
+        return [{"field": "profile", "tier": 1, "why": "no profile yet — run /setup"}]
+    gaps: list[Row] = []
+    for field, tier, why in _GAP_CATALOGUE:
+        if field == "achievements":
+            missing = not list_achievements(uow, user_id, prof["id"])
+        elif field == "style_profile":
+            missing = get_style_profile(uow, user_id, prof["id"]) is None
+        else:
+            missing = not prof.get(field)
+        if missing:
+            gaps.append({"field": field, "tier": tier, "why": why})
+    return sorted(gaps, key=lambda g: g["tier"])
+
+
 def export_for_brief(
     uow: UnitOfWork,
     user_id: int,
