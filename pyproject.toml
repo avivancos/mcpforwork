@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"
 authors = [{ name = "Agustin Vivancos", email = "agusvc@gmail.com" }]
-dependencies = []
+dependencies = [
+    "mcp>=1.2",
+    "pyyaml>=6",
+]
 
 [project.optional-dependencies]
 # Hosted-only. SQLite self-host installs stay driver-free; the db adapter
