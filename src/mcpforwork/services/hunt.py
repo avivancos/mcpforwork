@@ -62,6 +62,7 @@ def hunt_plan(uow: UnitOfWork, user_id: int) -> dict[str, Any]:
         {
             "slug": s.slug,
             "name": s.name,
+            "mode": s.mode,
             "search_url": s.search_url(query) if query else s.base_url,
             "result_hint": s.result_hint,
             "apply_hint": s.apply.get("ats_hint"),
@@ -82,6 +83,7 @@ def source_playbook(slug: str, query: str = "") -> dict[str, Any]:
         "base_url": source.base_url,
         "countries": list(source.countries),
         "sectors": list(source.sectors),
+        "mode": source.mode,
         "search_url": source.search_url(query) if query else source.url_template,
         "result_hint": source.result_hint,
         "apply_playbook": source.apply,

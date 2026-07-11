@@ -51,7 +51,11 @@ def test_list_sources_tool_returns_the_seed_packs(mcp_env) -> None:
 def test_source_playbook_tool(mcp_env) -> None:
     playbook = json.loads(server.source_playbook("weworkremotely", "data engineer"))
     assert playbook["slug"] == "weworkremotely"
-    assert "data" in playbook["search_url"].lower()
+    # S2.6: weworkremotely is a search_box board — the playbook returns the
+    # navigable search PAGE (the client types the query on-screen), not a URL
+    # with the query interpolated.
+    assert playbook["mode"] == "search_box"
+    assert playbook["search_url"] == "https://weworkremotely.com/remote-jobs"
 
 
 def test_get_match_unknown_id_returns_error(mcp_env) -> None:

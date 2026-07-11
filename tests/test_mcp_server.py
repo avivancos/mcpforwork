@@ -32,6 +32,14 @@ def test_server_instructions_state_the_consent_and_zero_llm_invariants() -> None
     assert "never fetches" in text or "never browses" in text or "server never" in text
 
 
+def test_hunt_guidance_tells_the_client_to_use_the_search_box_when_mode_says_so() -> None:
+    # S2.6: surfacing `mode` is inert unless the client is instructed to branch on
+    # it — the hunt breadcrumbs and SERVER_INSTRUCTIONS must mention search_box.
+    assert "search_box" in guidance.next_action("hunt_plan")
+    assert "search_box" in guidance.next_action("source_playbook")
+    assert "search_box" in guidance.SERVER_INSTRUCTIONS
+
+
 def test_uow_opens_a_tenant_scoped_handle_and_seeds_the_local_user(
     tmp_path: Path, monkeypatch
 ) -> None:

@@ -115,11 +115,130 @@ def test_no_shipped_template_puts_the_query_in_the_url_path() -> None:
     # in the query string — a path segment takes the "+" literally. This guards
     # the bug class that got Totaljobs/CV-Library dropped and stepstone-de fixed:
     # every shipped url_template must be query-param style ({query} after "?").
+    # search_box sources are exempt: they carry no {query} in a navigable URL —
+    # the client types the query into the board's on-page search box (S2.6).
     for slug, src in registry.load_sources().items():
+        if src.mode != "url_template":
+            continue
         before_query = src.url_template.split("?", 1)[0]
         assert "{query}" not in before_query, (
             f"{slug}: {{query}} must be in the query string, not the path"
         )
+
+
+# --- S2.6: search_box playbook mode (SPA / Cloudflare boards) ---------------
+
+
+def test_search_box_mode_does_not_require_query_in_the_url_template() -> None:
+    # In search_box mode the template is a plain, navigable search PAGE — no
+    # {query} to interpolate, because the client types the query on the page.
+    pack = copy.deepcopy(_VALID)
+    pack["sources"][0]["search_playbook"] = {
+        "mode": "search_box",
+        "url_template": "https://a.example.com/jobs",
+        "result_hint": "Type '{query}' into the on-page search box, then read the cards.",
+    }
+    assert validate_pack(pack) == []
+
+
+def test_url_template_mode_still_requires_the_query_placeholder() -> None:
+    pack = copy.deepcopy(_VALID)
+    pack["sources"][0]["search_playbook"] = {
+        "mode": "url_template",
+        "url_template": "https://a.example.com/jobs",  # no {query}
+    }
+    assert any("{query}" in e for e in validate_pack(pack))
+
+
+def test_search_box_mode_requires_a_result_hint_that_names_the_query() -> None:
+    # The hint IS the instruction ("type {query} here"); without it the client
+    # would not know what to type or where.
+    pack = copy.deepcopy(_VALID)
+    pack["sources"][0]["search_playbook"] = {
+        "mode": "search_box",
+        "url_template": "https://a.example.com/jobs",
+    }
+    assert any("result_hint" in e for e in validate_pack(pack))
+    pack["sources"][0]["search_playbook"]["result_hint"] = "just browse around"  # no {query}
+    assert any("{query}" in e for e in validate_pack(pack))
+
+
+def test_an_unknown_search_mode_is_rejected() -> None:
+    pack = copy.deepcopy(_VALID)
+    pack["sources"][0]["search_playbook"]["mode"] = "telepathy"
+    assert any("mode" in e for e in validate_pack(pack))
+
+
+def test_search_box_url_template_is_still_scheme_checked() -> None:
+    # The template is handed to the user's browser to OPEN even in search_box
+    # mode, so the http(s) guard must not be skipped (no javascript:/data:).
+    pack = copy.deepcopy(_VALID)
+    pack["sources"][0]["search_playbook"] = {
+        "mode": "search_box",
+        "url_template": "javascript:alert(1)",
+        "result_hint": "type {query} into the box",
+    }
+    assert any("http(s)" in e for e in validate_pack(pack))
+
+
+def test_a_search_box_source_that_forgets_mode_fails_loudly() -> None:
+    # Realistic authoring mistake: a search-PAGE url_template (no {query}) written
+    # WITHOUT `mode: search_box` defaults to url_template and must be rejected,
+    # not silently shipped as a broken query-param source.
+    pack = copy.deepcopy(_VALID)
+    pack["sources"][0]["search_playbook"] = {
+        "url_template": "https://a.example.com/jobs",  # no mode, no {query}
+        "result_hint": "type {query} here",
+    }
+    assert any("{query}" in e for e in validate_pack(pack))
+
+
+def test_absent_mode_defaults_to_url_template() -> None:
+    # Back-compat: the country packs omit `mode` and must keep validating.
+    pack = copy.deepcopy(_VALID)  # its search_playbook has no `mode`
+    assert validate_pack(pack) == []
+    assert registry._to_source(pack["sources"][0]).mode == "url_template"
+
+
+def test_search_box_source_search_url_returns_the_navigable_page_unchanged() -> None:
+    src = registry.load_sources()["remotive"]
+    assert src.mode == "search_box"
+    # No encoding, no {query} — it is the page the client opens before typing.
+    assert src.search_url("data engineer") == src.url_template
+    assert "{query}" not in src.search_url("data engineer")
+
+
+def test_source_playbook_surfaces_the_search_mode() -> None:
+    from mcpforwork.services import hunt
+
+    pb = hunt.source_playbook("remotive", "data engineer")
+    assert pb["mode"] == "search_box"
+    assert pb["search_url"] == "https://remotive.com/remote-jobs"  # the page, not a filled template
+
+
+def test_hunt_plan_surfaces_the_mode_per_source(uow) -> None:
+    from mcpforwork.services import hunt, profiles
+
+    uid = uow.insert("INSERT INTO users (email) VALUES (?)", ("u@example.com",))
+    profiles.create_profile(
+        uow, uid, {"target_titles": ["Data Engineer"], "work_modes": ["remote"]}
+    )
+    uow.commit()
+    plan = hunt.hunt_plan(uow, uid)
+    modes = {s["slug"]: s["mode"] for s in plan["sources"]}
+    assert modes.get("remotive") == "search_box"  # a converted SPA board carries its mode
+
+
+def test_global_remote_boards_are_verified_search_box_and_dead_boards_dropped() -> None:
+    # S2.6 browser verification: none of the dedicated remote boards have a
+    # working URL-param search, so every ENABLED one is search_box. hnhiring
+    # (tag-index, no search box) and remoteok (paywalled search) are NOT shipped.
+    sources = registry.load_sources()
+    for slug in ("remotive", "weworkremotely", "himalayas", "jobicy", "workingnomads"):
+        assert sources[slug].mode == "search_box", f"{slug} must be search_box"
+        assert sources[slug].enabled
+    assert "hnhiring" not in sources
+    assert "remoteok" not in sources
 
 
 def test_all_shipped_packs_load_and_validate() -> None:

@@ -1,6 +1,6 @@
 pack:
   id: global-remote
-  version: 1
+  version: 2
   kind: global
   title: Global remote-first job boards
 
@@ -8,13 +8,20 @@ pack:
 # country; sectors=[any] matches any target sector. The client fills {query}
 # with the profile's target titles.
 #
-# NOTE (S2.5): these dedicated remote boards are SPAs / Cloudflare-protected and
-# their URL-based search could NOT be browser-verified the way the country
-# aggregators (Indeed/Reed/Adzuna/InfoJobs) were. Their url_templates use each
-# board's documented query-param but liveness is UNVERIFIED. RemoteOK was dropped
-# entirely — it is tag-path (remote-{tag}-jobs) and takes quote_plus's "+"
-# literally. Follow-up card: verify these + add a "search_box" playbook mode for
-# SPA boards where the client types the query instead of a url_template.
+# S2.6 browser verification (in-app browser, query "data engineer"): NONE of the
+# dedicated remote boards have a working URL-param search — Remotive, WeWorkRemotely
+# and Working Nomads drop the query param and redirect to a generic homepage;
+# Himalayas and Jobicy sit behind a Cloudflare challenge. So every enabled board
+# uses `search_playbook.mode: search_box`: the template is the board's search
+# PAGE and result_hint tells the client to type {query} into the on-page box (the
+# human clears any Cloudflare check first via the unblock_source flow).
+#
+# NOT shipped, with reasons (verified S2.5/S2.6):
+#   - remoteok: tag-path (remote-{tag}-jobs) takes quote_plus's "+" literally AND
+#     multi-word titles have no tag page; its on-page search now hard-paywalls
+#     ("Choose your plan", $14.95/mo) — not a working free board.
+#   - hnhiring: a tag-index of the monthly HN "Who is hiring" thread, no free-text
+#     search box and no working ?q= — it does not fit the query-driven model.
 sources:
   - slug: remotive
     name: Remotive
@@ -25,8 +32,9 @@ sources:
     tier: free
     enabled: true
     search_playbook:
-      url_template: "https://remotive.com/remote-jobs?search={query}"
-      result_hint: "Results under the search box; filter chips narrow by category."
+      mode: search_box
+      url_template: "https://remotive.com/remote-jobs"
+      result_hint: "SPA — no URL search. Type '{query}' into the on-page search box, then read the result cards (each links to the posting)."
 
   - slug: weworkremotely
     name: We Work Remotely
@@ -37,8 +45,9 @@ sources:
     tier: free
     enabled: true
     search_playbook:
-      url_template: "https://weworkremotely.com/remote-jobs/search?term={query}"
-      result_hint: "Results grouped by category; each card links to the posting."
+      mode: search_box
+      url_template: "https://weworkremotely.com/remote-jobs"
+      result_hint: "Type '{query}' into the on-page search box. Results group by category; each card links to the posting."
 
   - slug: himalayas
     name: Himalayas
@@ -49,8 +58,9 @@ sources:
     tier: free
     enabled: true
     search_playbook:
-      url_template: "https://himalayas.app/jobs?search={query}"
-      result_hint: "Infinite scroll; use the country filter for work-authorization."
+      mode: search_box
+      url_template: "https://himalayas.app/jobs"
+      result_hint: "Cloudflare-gated — the human clears the check first. Then type '{query}' into the on-page search box; use the country filter for work-authorization."
 
   - slug: jobicy
     name: Jobicy
@@ -61,7 +71,9 @@ sources:
     tier: free
     enabled: true
     search_playbook:
-      url_template: "https://jobicy.com/?s={query}"
+      mode: search_box
+      url_template: "https://jobicy.com"
+      result_hint: "Cloudflare-gated — the human clears the check first. Then type '{query}' into the on-page search box."
 
   - slug: workingnomads
     name: Working Nomads
@@ -72,16 +84,6 @@ sources:
     tier: free
     enabled: true
     search_playbook:
-      url_template: "https://www.workingnomads.com/jobs?search={query}"
-
-  - slug: hnhiring
-    name: HN Who is Hiring (search)
-    base_url: https://hnhiring.com
-    countries: [global]
-    sectors: [any]
-    remote: true
-    tier: free
-    enabled: true
-    search_playbook:
-      url_template: "https://hnhiring.com/?q={query}"
-      result_hint: "Aggregates the monthly HN 'Who is hiring' thread; one comment per role."
+      mode: search_box
+      url_template: "https://www.workingnomads.com/jobs"
+      result_hint: "SPA — no URL search. Type '{query}' into the on-page search box (or use the Category filter), then read the listing."

@@ -36,12 +36,18 @@ class PackSource:
     remote: bool
     tier: str
     enabled: bool
+    mode: str
     url_template: str
     result_hint: str | None
     apply: dict[str, Any]
 
     def search_url(self, query: str) -> str:
-        """The search URL for `query` (target titles), URL-encoded."""
+        """The URL the client opens for `query` (target titles). In url_template
+        mode the query is quote_plus-encoded into the template; in search_box
+        mode there is no query in the URL — the client types it into the board's
+        on-page box — so the navigable page URL is returned unchanged."""
+        if self.mode == "search_box":
+            return self.url_template
         return self.url_template.replace("{query}", quote_plus(query))
 
 
@@ -56,6 +62,7 @@ def _to_source(raw: dict[str, Any]) -> PackSource:
         remote=bool(raw.get("remote", False)),
         tier=raw.get("tier", "free"),
         enabled=bool(raw.get("enabled", False)),
+        mode=playbook.get("mode", "url_template"),
         url_template=playbook.get("url_template", ""),
         result_hint=playbook.get("result_hint"),
         apply=raw.get("apply_playbook") or {},

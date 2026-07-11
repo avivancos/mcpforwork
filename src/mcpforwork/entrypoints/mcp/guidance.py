@@ -16,9 +16,10 @@ SERVER_INSTRUCTIONS = (
     "Default flow:\n"
     "1. /setup — build the profile (get_profile / update_profile / "
     "add_achievements / set_style_profile).\n"
-    "2. /hunt — hunt_plan returns per-source search playbooks; open each in your "
-    "browser, extract postings, submit_findings (deduped + scored), then "
-    "list_matches to review.\n"
+    "2. /hunt — hunt_plan returns per-source search playbooks (each with a "
+    "`mode`); open each in your browser — for `search_box` sources type the query "
+    "into the on-page box — extract postings, submit_findings (deduped + scored), "
+    "then list_matches to review.\n"
     "3. Review matches (assets + supervised apply arrive in later sprints).\n\n"
     "Always follow each response's next_action. Never claim anything the "
     "profile does not support."
@@ -40,8 +41,17 @@ _NEXT_ACTIONS: dict[str, str] = {
         "CONFIRM the extracted fields with the human (None = ask, never invent), "
         "then update_profile with the confirmed values + cv_text."
     ),
-    "hunt_plan": "Open each search_url in YOUR browser, extract postings, then submit_findings.",
-    "source_playbook": "Open the search_url in your browser and extract the postings.",
+    "hunt_plan": (
+        "For each source open its search_url in YOUR browser. If mode is "
+        "'search_box', the URL is the search PAGE — type the query into the "
+        "on-page box per result_hint (the query param does not work). Extract "
+        "postings, then submit_findings."
+    ),
+    "source_playbook": (
+        "Open the search_url in your browser. If mode is 'search_box', type the "
+        "query into the on-page box per result_hint; otherwise the URL is already "
+        "filtered. Extract the postings."
+    ),
     "list_sources": "Run hunt_plan to pick sources for the active profile.",
     "submit_findings": "Call list_matches to review what scored well.",
     "check_seen": "Only browse/apply URLs marked 'new'; skip the rest.",

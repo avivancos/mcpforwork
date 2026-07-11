@@ -7,8 +7,11 @@ selecting sources is `packs/registry.py`.
 
 Clean structured taxonomy (replacing the donor's free-text cat/region): each
 source declares ISO-3166 alpha-2 `countries` (or "global"), `sectors` (or
-"any"), a `remote` flag, and a `search_playbook.url_template` carrying a
-`{query}` placeholder the client fills with the candidate's target titles.
+"any"), a `remote` flag, and a `search_playbook`. The playbook's `mode` (default
+`url_template`) picks how the client reaches results: `url_template` fills a
+`{query}` placeholder into a navigable URL; `search_box` gives a plain search
+PAGE and the client types `{query}` into the board's on-page box (for SPA /
+Cloudflare boards whose URL-param search does not work — see S2.6).
 """
 
 from __future__ import annotations
@@ -19,6 +22,11 @@ from typing import Any
 
 PACK_KINDS = frozenset({"global", "country", "sector"})
 TIERS = frozenset({"free", "pro"})
+# How the client reaches filtered results. `url_template` (default) fills {query}
+# into a navigable URL; `search_box` navigates to a plain search PAGE and the
+# client types {query} into the board's on-page box (for SPA / Cloudflare boards
+# whose URL-param search does not work — verified in S2.6).
+SEARCH_MODES = frozenset({"url_template", "search_box"})
 _ISO_ALPHA2 = re.compile(r"^[A-Z]{2}$")
 
 
@@ -75,6 +83,9 @@ def _validate_source(src: Any, where: str, seen_slugs: set[str]) -> list[str]:
     if not isinstance(playbook, Mapping):
         errors.append(f"{where}.search_playbook is required")
     else:
+        mode = playbook.get("mode", "url_template")
+        if mode not in SEARCH_MODES:
+            errors.append(f"{where}.search_playbook.mode must be one of {sorted(SEARCH_MODES)}")
         template = playbook.get("url_template")
         if not isinstance(template, str):
             errors.append(f"{where}.search_playbook.url_template is required")
@@ -84,8 +95,19 @@ def _validate_source(src: Any, where: str, seen_slugs: set[str]) -> list[str]:
             # / data: / other schemes.
             if not template.startswith(("http://", "https://")):
                 errors.append(f"{where}.search_playbook.url_template must be an http(s) URL")
-            if "{query}" not in template:
+            # Only url_template mode interpolates the query into the URL. In
+            # search_box mode the template is a plain page and {query} is typed
+            # on-page, so it is carried in result_hint instead (checked below).
+            if mode == "url_template" and "{query}" not in template:
                 errors.append(f"{where}.search_playbook.url_template must contain '{{query}}'")
+        if mode == "search_box":
+            hint = playbook.get("result_hint")
+            if not isinstance(hint, str):
+                errors.append(f"{where}.search_playbook.result_hint is required in search_box mode")
+            elif "{query}" not in hint:
+                errors.append(
+                    f"{where}.search_playbook.result_hint must contain '{{query}}' (search_box)"
+                )
 
     apply_pb = src.get("apply_playbook")
     if apply_pb is not None:

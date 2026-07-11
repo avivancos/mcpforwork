@@ -22,8 +22,44 @@ def test_hunt_plan_returns_actionable_search_urls_for_the_active_profile(uow) ->
     uow.commit()
     plan = hunt.hunt_plan(uow, uid)
     assert plan["count"] > 0
+    assert plan["query"]  # the raw query the client fills into a URL or types on-page
     assert all(s["search_url"].startswith("http") for s in plan["sources"])
-    assert any("data" in s["search_url"].lower() for s in plan["sources"])
+    assert all(s["mode"] in ("url_template", "search_box") for s in plan["sources"])
+    for s in plan["sources"]:
+        # url_template boards carry the query IN the URL; search_box boards carry
+        # a navigable page and the client types plan["query"] on-screen (S2.6).
+        if s["mode"] == "url_template":
+            assert "data" in s["search_url"].lower()
+    # The remote profile selects the converted global-remote search_box boards.
+    assert any(s["mode"] == "search_box" for s in plan["sources"])
+
+
+def test_hunt_plan_fills_the_query_into_url_template_sources(uow) -> None:
+    # Regression: a US, non-remote-only profile selects url_template country
+    # boards (indeed-us etc.). This proves hunt_plan actually interpolates the
+    # query into their search_url — the path S2.6's search_box conversion of the
+    # remote boards removed from the other hunt_plan test's coverage.
+    uid = _user(uow)
+    profiles.create_profile(
+        uow,
+        uid,
+        {"target_titles": ["Data Engineer"], "work_auth_countries": ["US"]},  # no work_modes
+    )
+    uow.commit()
+    plan = hunt.hunt_plan(uow, uid)
+    url_template_sources = [s for s in plan["sources"] if s["mode"] == "url_template"]
+    assert url_template_sources, "a US profile must select url_template country boards"
+    for s in url_template_sources:
+        assert "data" in s["search_url"].lower()  # the query is filled INTO the URL
+        assert "{query}" not in s["search_url"]  # and the placeholder is gone
+
+
+def test_source_playbook_fills_the_query_for_a_url_template_source(uow) -> None:
+    # source_playbook must interpolate the query for url_template sources (a
+    # sibling gap to hunt_plan — both call PackSource.search_url at their own site).
+    pb = hunt.source_playbook("indeed-us", "data engineer")
+    assert pb["mode"] == "url_template"
+    assert "data" in pb["search_url"].lower() and "{query}" not in pb["search_url"]
 
 
 def test_hunt_plan_without_a_profile_returns_an_error(uow) -> None:
