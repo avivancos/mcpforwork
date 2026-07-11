@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -183,11 +183,35 @@ CREATE TABLE generated_assets (
 CREATE INDEX idx_assets_finding ON generated_assets(finding_id);
 """
 
+# applications: the browser-apply orchestration sessions (state machine), plus
+# profiles.form_answers — the progressive Q&A store resolve_field saves to.
+_APPLICATIONS_SQLITE = """
+CREATE TABLE applications (
+  id            INTEGER PRIMARY KEY,
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  finding_id    INTEGER NOT NULL REFERENCES explore_findings(id),
+  state         TEXT NOT NULL DEFAULT 'draft',
+  apply_method  TEXT,
+  consent_level INTEGER NOT NULL DEFAULT 0,
+  steps         TEXT,   -- JSON step plan
+  current_step  INTEGER NOT NULL DEFAULT 0,
+  outcome       TEXT,
+  evidence      TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX idx_applications_user ON applications(user_id);
+CREATE INDEX idx_applications_finding ON applications(finding_id);
+
+ALTER TABLE profiles ADD COLUMN form_answers TEXT;
+"""
+
 MIGRATIONS: dict[int, str] = {
     2: _PROFILES_SQLITE,
     3: _EXTERNAL_APPS_SQLITE,
     4: _FINDINGS_SQLITE,
     5: _ASSETS_SQLITE,
+    6: _APPLICATIONS_SQLITE,
 }
 
 # Migrations whose script recreates a table that FK children reference; these
@@ -202,6 +226,7 @@ _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "003_external_applications.sql": 3,
     "004_findings.sql": 4,
     "005_assets.sql": 5,
+    "006_applications.sql": 6,
 }
 
 

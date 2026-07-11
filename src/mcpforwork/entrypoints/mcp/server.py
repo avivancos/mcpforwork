@@ -20,6 +20,7 @@ from mcpforwork.adapters.db import SqlUnitOfWork, connect
 from mcpforwork.domain.profile import ProfileValidationError
 from mcpforwork.entrypoints.mcp import guidance
 from mcpforwork.entrypoints.mcp.guidance import SERVER_INSTRUCTIONS
+from mcpforwork.services import apply as apply_service
 from mcpforwork.services import assets, audit, briefs, coverage, dedup, hunt, profiles, review
 
 mcp = FastMCP("mcpforwork", instructions=SERVER_INSTRUCTIONS)
@@ -408,6 +409,23 @@ def discard_match(finding_id: int, reason: str = "") -> str:
     finally:
         uow.close()
     return _ok("discard_match", result)
+
+
+@mcp.tool()
+def start_application(finding_id: int) -> str:
+    """Start a supervised application session for an APPROVED match: runs the
+    preflight (dedup gate, daily cap) and returns the step plan YOU execute in
+    the user's browser. The plan never contains a submit step — request_submit
+    is the only submission route and the human decides."""
+    uow, user_id = _uow()
+    try:
+        session = apply_service.start_application(uow, user_id, finding_id)
+        if "error" in session:
+            return _fail(session["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("start_application", session)
 
 
 @mcp.tool()

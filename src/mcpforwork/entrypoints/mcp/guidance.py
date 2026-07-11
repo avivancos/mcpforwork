@@ -41,6 +41,10 @@ _NEXT_ACTIONS: dict[str, str] = {
     "submit_findings": "Call list_matches to review what scored well.",
     "check_seen": "Only browse/apply URLs marked 'new'; skip the rest.",
     "record_application": "Done — the posting will never re-surface. Back to /review.",
+    "start_application": (
+        "Execute the steps in the user's browser; report each with "
+        "report_apply_progress. Unknown questions -> resolve_field. Never click Submit."
+    ),
     "list_matches": "Run /review with the human: approve_match or discard_match each.",
     "approve_match": "Run /apply: get_generation_brief to draft materials.",
     "discard_match": "Back to list_matches for the next one.",
