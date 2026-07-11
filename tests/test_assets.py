@@ -48,3 +48,10 @@ def test_submit_against_a_foreign_finding_errors(uow: SqlUnitOfWork) -> None:
 def test_unknown_asset_type_errors(uow: SqlUnitOfWork) -> None:
     uid, fid = _seed_match(uow)
     assert "error" in assets.submit_asset(uow, uid, fid, "poem", "x")
+
+
+def test_empty_or_whitespace_content_is_rejected(uow: SqlUnitOfWork) -> None:
+    uid, fid = _seed_match(uow)
+    assert "error" in assets.submit_asset(uow, uid, fid, "cv", "")
+    assert "error" in assets.submit_asset(uow, uid, fid, "cv", "   \n")
+    assert assets.get_assets(uow, uid, fid) == []

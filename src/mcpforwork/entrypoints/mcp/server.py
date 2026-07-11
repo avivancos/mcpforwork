@@ -410,6 +410,23 @@ def discard_match(finding_id: int, reason: str = "") -> str:
     return _ok("discard_match", result)
 
 
+@mcp.tool()
+def record_application(url: str, channel: str = "", method: str = "", notes: str = "") -> str:
+    """Record that the HUMAN submitted an application (any channel) so the
+    copilot never re-surfaces the posting. Idempotent per URL."""
+    uow, user_id = _uow()
+    try:
+        result = dedup.record_application(
+            uow, user_id, url=url, channel=channel, method=method, notes=notes
+        )
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("record_application", result)
+
+
 @mcp.prompt(name="setup")
 def setup_session() -> str:
     """The /setup interview: build the Tier-1 profile in under 3 minutes."""

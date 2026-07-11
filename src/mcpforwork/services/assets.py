@@ -35,11 +35,16 @@ def submit_asset(
         (user_id, finding_id, asset_type),
     )
     version = current["v"] + 1
-    asset_id = uow.insert(
-        "INSERT INTO generated_assets (user_id, finding_id, asset_type, content, version)"
-        " VALUES (?, ?, ?, ?, ?)",
-        (user_id, finding_id, asset_type, content, version),
-    )
+    try:
+        asset_id = uow.insert(
+            "INSERT INTO generated_assets (user_id, finding_id, asset_type, content, version)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (user_id, finding_id, asset_type, content, version),
+        )
+    except Exception:  # noqa: BLE001 — MAX+1 raced a concurrent submit into the
+        # UNIQUE(user, finding, type, version) constraint; no corruption, retryable.
+        uow.rollback()
+        return {"error": "concurrent submit for this match — retry"}
     audit.record(
         uow,
         user_id,

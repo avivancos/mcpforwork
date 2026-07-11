@@ -40,8 +40,18 @@ def test_facts_inventory_contains_only_profile_provable_claims() -> None:
     inv = build_facts_inventory(profile, achievements)
     assert inv["identity"]["full_name"] == "Ada"
     assert inv["achievements"][0]["metric"] == "Cut costs 30%"
-    assert "min_salary_amount" not in str(inv)  # salary never in a brief
+    assert "min_salary_amount" not in str(inv)  # salary KEY never in a brief
+    assert "90000" not in str(inv)  # salary VALUE never in a brief either
     assert inv["gaps_policy"] == "acknowledge"
+
+
+def test_title_terms_outrank_equal_frequency_body_terms() -> None:
+    # "alpha" appears once in the title, "beta" once in the body: the title
+    # boost must rank alpha first (golden ordering, kills a boost-removal mutant).
+    ranked = extract_keywords("Alpha specialist", "beta tools daily. beta and gamma.")
+    # alpha: title boost 3 > beta: frequency 2 > gamma: frequency 1
+    assert ranked.index("alpha") < ranked.index("beta") < ranked.index("gamma")
+    assert extract_keywords("Alpha specialist", "beta tools daily. beta and gamma.") == ranked
 
 
 def test_facts_inventory_with_no_achievements_is_empty_not_invented() -> None:

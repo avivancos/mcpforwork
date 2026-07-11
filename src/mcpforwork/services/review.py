@@ -18,10 +18,15 @@ def approve_match(uow: UnitOfWork, user_id: int, finding_id: int) -> dict[str, A
         return {"error": f"match {finding_id} not found"}
     if match["status"] not in _APPROVABLE:
         return {"error": f"match {finding_id} is '{match['status']}' — cannot approve"}
-    uow.execute(
-        "UPDATE explore_findings SET status = 'approved' WHERE id = ? AND user_id = ?",
+    # State predicate in the UPDATE itself: a concurrent discard between the
+    # read above and this write must not be silently overwritten.
+    cur = uow.execute(
+        "UPDATE explore_findings SET status = 'approved'"
+        " WHERE id = ? AND user_id = ? AND status IN ('new', 'review')",
         (finding_id, user_id),
     )
+    if cur.rowcount == 0:
+        return {"error": f"match {finding_id} changed state concurrently — re-check it"}
     audit.record(uow, user_id, "approve_match", {"finding_id": finding_id})
     return {"ok": True, "finding_id": finding_id, "status": "approved"}
 
