@@ -32,6 +32,7 @@ from mcpforwork.services import (
     dedup,
     hunt,
     playbooks,
+    privacy,
     profiles,
     review,
 )
@@ -551,6 +552,28 @@ def parse_cv(cv_text: str) -> str:
     if len(cv_text) > MAX_CV_CHARS:
         return _fail(f"cv_text too large (max {MAX_CV_CHARS} chars)")
     return _ok("parse_cv", extract_profile_from_cv(cv_text))
+
+
+@mcp.tool()
+def export_my_data() -> str:
+    """GDPR data portability: everything stored about you (profile, findings,
+    applications, assets, audit trail) as one JSON object. Read-only."""
+    with _tenant_uow() as (uow, user_id):
+        export = privacy.export_user_data(uow, user_id)
+    return _ok("export_my_data", export)
+
+
+@mcp.tool()
+def delete_my_data(confirm: bool = False) -> str:
+    """GDPR erasure: permanently delete ALL your data (every table + the account
+    row). IRREVERSIBLE — refuses unless confirm=True. Consider export_my_data
+    first."""
+    if not confirm:
+        return _fail("destructive — call again with confirm=True to erase all your data")
+    with _tenant_uow() as (uow, user_id):
+        result = privacy.delete_user_data(uow, user_id)
+        uow.commit()
+    return _ok("delete_my_data", result)
 
 
 @mcp.prompt(name="setup")

@@ -57,6 +57,8 @@ _NEXT_ACTIONS: dict[str, str] = {
         "Show the human the filled form; THEY click Submit. Then confirm_submitted."
     ),
     "abandon_application": "Closed. start_application again to retry, or back to /review.",
+    "export_my_data": "Your full data export. Save it somewhere safe.",
+    "delete_my_data": "All your data is erased. Nothing was kept.",
     "confirm_submitted": "Recorded. Optionally record_outcome later; back to /review.",
     "record_outcome": "Noted for calibration. Back to /review or /hunt.",
     "get_asset_file": "Upload this file where the form asks for it.",

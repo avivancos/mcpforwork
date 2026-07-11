@@ -59,9 +59,14 @@ decisions had to be fixed before any code existed.
   `external_applications` to add the `finding_id` FK to `explore_findings`, the
   recreation drops `ENABLE/FORCE ROW LEVEL SECURITY` + the policy — they MUST be
   re-added. The new fail-closed live test guards this (it fails if RLS is lost).
-- **[S6.4 — audit_log read access]** `audit_log` is intentionally not
-  FORCE-RLS'd and now stores per-tenant data (applied URLs). Before any read
-  path over it ships, scope it by `user_id` or add a read-side RLS policy.
+- **[S6.4 — audit_log read access] — RESOLVED (S6.4).** `audit_log` is
+  intentionally not FORCE-RLS'd and stores per-tenant data (applied URLs). The
+  only read path, `services/privacy.export_user_data`, filters every table
+  (audit_log included) by `user_id`; `tests/test_privacy_rls_live.py` proves on
+  live PG, as the restricted `app` role, that an unscoped audit_log read returns
+  both tenants (`[1,1,2,2]`) while the scoped export returns only the caller's.
+  Any FUTURE read path over audit_log must apply the same explicit scoping (it is
+  not covered by RLS).
 - **[hosting/pool card — session-GUC footgun]** `set_user_context` uses a
   session-scoped GUC, correct for the fresh-per-request-connection model. If
   connection pooling is introduced, enforce reset-on-checkout and add a test
@@ -89,6 +94,24 @@ decisions had to be fixed before any code existed.
 - **[still deferred — rule of two]** The entrypoint-independence import contract
   ("entrypoints never import each other") lands when the second entrypoint
   (API/CLI) exists. The guidance-purity contract was added in S2.
+
+## Carried follow-ups (from the S6.4 final-review gate)
+
+- **[hosted/headless — security P2→P1 there]** `delete_my_data(confirm=True)` is
+  an irreversible account wipe gated only by a client-controlled boolean. On
+  self-host this is proportionate (the MCP client surfaces destructive tool calls
+  for human approval, and untrusted content sits in the same LLM context only
+  under the human's eye). In any FUTURE headless/hosted path that invokes tools
+  without per-call human approval, this becomes P1: an injected instruction in
+  untrusted job-posting content could steer the client to call it. Before that
+  ships, add an out-of-band confirmation (e.g. a token from a dry-run the human
+  echoes) — mirror the L0 `request_submit → await_human` pattern for erasure.
+- **[note — done in S6.4]** Erasure now also unlinks the on-disk asset files
+  `get_asset_file` materialized (`data_dir/assets/{id}_{type}.md`), scoped to the
+  user's own generated_assets so it stays multi-tenant-safe; the "nothing is
+  kept" promise is literally true. No audit tombstone is written (a row
+  referencing a deleted user would violate the FK); revisit a tenant-less
+  tombstone (`user_id=NULL`) for hosted abuse-forensics.
 
 ## Carried follow-ups (from the S4 final-review gate)
 
