@@ -20,7 +20,7 @@ from mcpforwork.adapters.db import SqlUnitOfWork, connect
 from mcpforwork.domain.profile import ProfileValidationError
 from mcpforwork.entrypoints.mcp import guidance
 from mcpforwork.entrypoints.mcp.guidance import SERVER_INSTRUCTIONS
-from mcpforwork.services import assets, audit, briefs, coverage, dedup, hunt, profiles
+from mcpforwork.services import assets, audit, briefs, coverage, dedup, hunt, profiles, review
 
 mcp = FastMCP("mcpforwork", instructions=SERVER_INSTRUCTIONS)
 
@@ -380,6 +380,83 @@ def ats_coverage_check(finding_id: int, asset_id: int) -> str:
     if "error" in result:
         return _fail(result["error"])
     return _ok("ats_coverage_check", result)
+
+
+@mcp.tool()
+def approve_match(finding_id: int) -> str:
+    """Approve a match (human decision) so materials/apply can proceed."""
+    uow, user_id = _uow()
+    try:
+        result = review.approve_match(uow, user_id, finding_id)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("approve_match", result)
+
+
+@mcp.tool()
+def discard_match(finding_id: int, reason: str = "") -> str:
+    """Discard a match (human decision); it will never be re-surfaced."""
+    uow, user_id = _uow()
+    try:
+        result = review.discard_match(uow, user_id, finding_id, reason)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("discard_match", result)
+
+
+@mcp.prompt(name="setup")
+def setup_session() -> str:
+    """The /setup interview: build the Tier-1 profile in under 3 minutes."""
+    return (
+        "Interview the user to build their profile (target < 3 minutes):\n"
+        "1. Ask for: name+email, country+city, work-authorization countries (+ "
+        "sponsorship y/n), 1-5 target job titles + sector(s), seniority, employment "
+        "types, work modes (+ relocation), minimum salary (PRIVATE - never disclosed "
+        "in materials), languages, and their CV (paste text or a LinkedIn URL).\n"
+        "2. Persist with update_profile (one call with the whole patch). For a "
+        "LinkedIn/GitHub/portfolio URL: open it in the user's browser, extract "
+        "structured fields, and call import_from_url_findings(url, fields).\n"
+        "3. Offer Tier 2 progressively: add_achievements (quantified wins - the "
+        "highest-leverage input) and set_style_profile (a writing sample).\n"
+        "Never invent values; only persist what the user actually said."
+    )
+
+
+@mcp.prompt(name="review")
+def review_session() -> str:
+    """The /review loop: triage scouted matches with the human."""
+    return (
+        "Review the pipeline with the user:\n"
+        "1. list_matches(min_score=40) and present them best-first (title, company, "
+        "score, why it scored - the breakdown).\n"
+        "2. For each, the HUMAN decides: approve_match(id) or discard_match(id, "
+        "reason). Never approve or discard on your own judgment.\n"
+        "3. For approved matches, offer /apply (draft materials)."
+    )
+
+
+@mcp.prompt(name="apply")
+def apply_session() -> str:
+    """The /apply flow (S3 scope): brief -> honest draft -> coverage -> human sends."""
+    return (
+        "Draft application materials for an approved match:\n"
+        "1. get_generation_brief(finding_id, asset_type) - cv or cover_letter.\n"
+        "2. Draft honoring honesty_rules: ONLY claims the facts_inventory proves; "
+        "acknowledge gaps; match the posting's language; use the style sample.\n"
+        "3. submit_asset(finding_id, asset_type, content), then "
+        "ats_coverage_check(finding_id, asset_id).\n"
+        "4. Add missing_but_have items truthfully; NEVER stuff genuine_gaps - "
+        "acknowledge them. Iterate once if coverage is weak.\n"
+        "5. Show the final draft to the human. THE HUMAN sends/submits it - never "
+        "auto-submit anything (browser apply orchestration arrives in a later "
+        "version; record_application(url, channel) after the human confirms)."
+    )
 
 
 @mcp.prompt(name="hunt")
