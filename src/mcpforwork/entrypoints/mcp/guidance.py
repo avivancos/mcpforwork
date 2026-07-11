@@ -46,6 +46,8 @@ _NEXT_ACTIONS: dict[str, str] = {
         "Draft the asset honoring honesty_rules (only facts_inventory claims), then "
         "submit_asset and run ats_coverage_check."
     ),
+    "submit_asset": "Run ats_coverage_check(finding_id, asset_id) to spot gaps.",
+    "get_assets": "Iterate a draft with get_generation_brief, or run ats_coverage_check.",
 }
 
 

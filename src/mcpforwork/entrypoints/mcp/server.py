@@ -20,7 +20,7 @@ from mcpforwork.adapters.db import SqlUnitOfWork, connect
 from mcpforwork.domain.profile import ProfileValidationError
 from mcpforwork.entrypoints.mcp import guidance
 from mcpforwork.entrypoints.mcp.guidance import SERVER_INSTRUCTIONS
-from mcpforwork.services import audit, briefs, dedup, hunt, profiles
+from mcpforwork.services import assets, audit, briefs, dedup, hunt, profiles
 
 mcp = FastMCP("mcpforwork", instructions=SERVER_INSTRUCTIONS)
 
@@ -340,6 +340,31 @@ def get_generation_brief(finding_id: int, asset_type: str) -> str:
     if "error" in brief:
         return _fail(brief["error"])
     return _ok("get_generation_brief", brief)
+
+
+@mcp.tool()
+def submit_asset(finding_id: int, asset_type: str, content: str) -> str:
+    """Store YOUR draft (markdown) for a match; versions auto-increment."""
+    uow, user_id = _uow()
+    try:
+        result = assets.submit_asset(uow, user_id, finding_id, asset_type, content)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("submit_asset", result)
+
+
+@mcp.tool()
+def get_assets(finding_id: int, asset_type: str | None = None) -> str:
+    """The stored drafts for a match, newest version first."""
+    uow, user_id = _uow()
+    try:
+        rows = assets.get_assets(uow, user_id, finding_id, asset_type)
+    finally:
+        uow.close()
+    return _ok("get_assets", {"count": len(rows), "assets": rows})
 
 
 @mcp.prompt(name="hunt")

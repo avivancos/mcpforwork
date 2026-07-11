@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -167,10 +167,27 @@ ALTER TABLE external_applications_new RENAME TO external_applications;
 CREATE INDEX idx_extapp_user ON external_applications(user_id);
 """
 
+# generated_assets: versioned drafts (cv/cover_letter) the client LLM produced
+# against a finding. Version series per (user, finding, asset_type).
+_ASSETS_SQLITE = """
+CREATE TABLE generated_assets (
+  id         INTEGER PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  finding_id INTEGER NOT NULL REFERENCES explore_findings(id),
+  asset_type TEXT NOT NULL,
+  content    TEXT NOT NULL,
+  version    INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE(user_id, finding_id, asset_type, version)
+);
+CREATE INDEX idx_assets_finding ON generated_assets(finding_id);
+"""
+
 MIGRATIONS: dict[int, str] = {
     2: _PROFILES_SQLITE,
     3: _EXTERNAL_APPS_SQLITE,
     4: _FINDINGS_SQLITE,
+    5: _ASSETS_SQLITE,
 }
 
 # Migrations whose script recreates a table that FK children reference; these
@@ -184,6 +201,7 @@ _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "002_profiles.sql": 2,
     "003_external_applications.sql": 3,
     "004_findings.sql": 4,
+    "005_assets.sql": 5,
 }
 
 
