@@ -17,24 +17,17 @@ Signatures are ``(uow, user_id, ...)``; the caller owns the transaction.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 from mcpforwork.domain.dedup import dedup_hash
 from mcpforwork.ports.db import UnitOfWork
+from mcpforwork.services import audit
 
 
 def _utcnow_iso() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _audit(uow: UnitOfWork, user_id: int, action: str, detail: dict[str, Any]) -> None:
-    uow.insert(
-        "INSERT INTO audit_log (user_id, action, detail) VALUES (?, ?, ?)",
-        (user_id, action, json.dumps(detail)),
-    )
 
 
 def check_seen(uow: UnitOfWork, user_id: int, urls: Sequence[str]) -> dict[str, Any]:
@@ -153,7 +146,9 @@ def record_application(
             ),
         )
 
-    _audit(uow, user_id, "record_application", {"url": url, "channel": channel, "deduped": deduped})
+    audit.record(
+        uow, user_id, "record_application", {"url": url, "channel": channel, "deduped": deduped}
+    )
     return {"ok": True, "external_application_id": ext_id, "deduped": deduped, "url": url}
 
 

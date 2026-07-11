@@ -27,6 +27,7 @@ SERVER_INSTRUCTIONS = (
 # tool name -> advisory next step. Tools absent here get "" (see next_action).
 _NEXT_ACTIONS: dict[str, str] = {
     "server_info": "Call get_profile to see the active profile, or run /setup to build it.",
+    "create_profile": "Enrich it with update_profile / add_achievements, then run hunt_plan.",
     "get_profile": "Fill gaps with update_profile / add_achievements, then run hunt_plan.",
     "update_profile": "Add quantified wins with add_achievements, or run hunt_plan.",
     "list_profiles": "set_active_profile to switch, or get_profile to inspect one.",

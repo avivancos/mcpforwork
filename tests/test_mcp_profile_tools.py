@@ -1,0 +1,92 @@
+"""Profile MCP tools driven over a real tmp DB — no mocks."""
+
+import json
+
+import pytest
+
+from mcpforwork.adapters.db import connect
+from mcpforwork.entrypoints.mcp import server
+from mcpforwork.services import profiles
+
+
+@pytest.fixture
+def mcp_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("MCPFORWORK_DB_URL", f"sqlite:///{tmp_path / 'm.db'}")
+    monkeypatch.setenv("MCPFORWORK_USER_ID", "1")
+    return f"sqlite:///{tmp_path / 'm.db'}"
+
+
+def test_update_creates_the_active_profile_when_none_exists(mcp_env) -> None:
+    result = json.loads(
+        server.update_profile({"full_name": "Ada", "target_titles": ["Backend Engineer"]})
+    )
+    assert result["ok"] is True
+    got = json.loads(server.get_profile())
+    assert got["profile"]["full_name"] == "Ada"
+    assert got["profile"]["target_titles"] == ["Backend Engineer"]
+    assert got["next_action"]
+
+
+def test_get_profile_before_setup_returns_error(mcp_env) -> None:
+    assert "error" in json.loads(server.get_profile())
+
+
+def test_update_validation_error_returns_error_not_raise(mcp_env) -> None:
+    assert "error" in json.loads(server.update_profile({"seniority": "wizard"}))
+
+
+def test_list_and_set_active_profile(mcp_env) -> None:
+    server.update_profile({"full_name": "Ada"})  # profile 1 (active)
+    first = json.loads(server.get_profile())["profile"]["id"]
+    second = json.loads(server.create_profile({"full_name": "Ada Data"}, label="data"))[
+        "profile_id"
+    ]
+
+    listed = json.loads(server.list_profiles())["profiles"]
+    assert {p["id"] for p in listed} == {first, second}
+    assert json.loads(server.get_profile())["profile"]["id"] == second  # newest is active
+
+    server.set_active_profile(first)
+    assert json.loads(server.get_profile())["profile"]["id"] == first
+
+
+def test_add_achievements_and_set_style_on_active_profile(mcp_env) -> None:
+    server.update_profile({"full_name": "Ada"})
+    r = json.loads(server.add_achievements([{"metric": "Cut latency 40%", "role": "Lead"}]))
+    assert r["ok"] is True
+    server.set_style_profile("Dear team, ...", {"tone": "warm"})
+    prof_id = json.loads(server.get_profile())["profile"]["id"]
+    # Verify persisted via the service on a fresh connection to the same DB.
+    uow = connect(mcp_env)
+    try:
+        assert [a["metric"] for a in profiles.list_achievements(uow, 1, prof_id)] == [
+            "Cut latency 40%"
+        ]
+        assert profiles.get_style_profile(uow, 1, prof_id)["directives"] == {"tone": "warm"}
+    finally:
+        uow.close()
+
+
+def test_add_achievements_to_a_foreign_profile_returns_error(mcp_env) -> None:
+    server.update_profile({"full_name": "Ada"})
+    # profile id 999 does not belong to the local user.
+    assert "error" in json.loads(server.add_achievements([{"metric": "x"}], profile_id=999))
+
+
+def test_import_from_url_findings_applies_fields_and_audits_source(mcp_env) -> None:
+    server.update_profile({"full_name": "Ada"})
+    result = json.loads(
+        server.import_from_url_findings(
+            "https://linkedin.com/in/ada", {"city": "London", "sectors": ["fintech"]}
+        )
+    )
+    assert result["profile"]["city"] == "London"
+    assert result["source"] == "https://linkedin.com/in/ada"
+    uow = connect(mcp_env)
+    try:
+        audit = uow.fetchone(
+            "SELECT detail FROM audit_log WHERE action = 'import_from_url_findings'"
+        )
+        assert "linkedin.com/in/ada" in audit["detail"]
+    finally:
+        uow.close()
