@@ -35,6 +35,10 @@ _NEXT_ACTIONS: dict[str, str] = {
     "add_achievements": "set_style_profile to capture the writing voice, or run hunt_plan.",
     "set_style_profile": "Run hunt_plan to start searching.",
     "import_from_url_findings": "get_profile to review the merged fields.",
+    "parse_cv": (
+        "CONFIRM the extracted fields with the human (None = ask, never invent), "
+        "then update_profile with the confirmed values + cv_text."
+    ),
     "hunt_plan": "Open each search_url in YOUR browser, extract postings, then submit_findings.",
     "source_playbook": "Open the search_url in your browser and extract the postings.",
     "list_sources": "Run hunt_plan to pick sources for the active profile.",

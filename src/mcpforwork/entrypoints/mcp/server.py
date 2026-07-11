@@ -19,6 +19,7 @@ from mcp.server.fastmcp import FastMCP
 
 from mcpforwork import config
 from mcpforwork.adapters.db import SqlUnitOfWork, connect
+from mcpforwork.domain.cv import extract_profile_from_cv
 from mcpforwork.domain.profile import ProfileValidationError
 from mcpforwork.entrypoints.mcp import guidance
 from mcpforwork.entrypoints.mcp.guidance import SERVER_INSTRUCTIONS
@@ -519,6 +520,14 @@ def record_application(url: str, channel: str = "", method: str = "", notes: str
             return _fail(result["error"])
         uow.commit()
     return _ok("record_application", result)
+
+
+@mcp.tool()
+def parse_cv(cv_text: str) -> str:
+    """Zero-LLM regex extraction of contact fields from pasted CV text. Returns
+    candidate fields (None = unknown — ask the human, never invent). Does NOT
+    write the profile: CONFIRM with the human, then call update_profile."""
+    return _ok("parse_cv", extract_profile_from_cv(cv_text))
 
 
 @mcp.prompt(name="setup")
