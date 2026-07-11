@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
 from typing import Any
 
 from mcpforwork.domain.dedup import dedup_hash
@@ -20,6 +19,7 @@ from mcpforwork.domain.scoring import determine_action, score_finding
 from mcpforwork.packs import registry
 from mcpforwork.ports.db import Row, UnitOfWork
 from mcpforwork.services import audit, profiles
+from mcpforwork.services.clock import utcnow_iso
 
 # Descriptive fields a re-sight may enrich (merged over the stored finding).
 _DESCRIPTIVE_FIELDS = (
@@ -30,10 +30,6 @@ _DESCRIPTIVE_FIELDS = (
     "salary_text",
     "description",
 )
-
-
-def _utcnow_iso() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _wants_remote(profile: Mapping[str, Any]) -> bool | None:
@@ -154,7 +150,7 @@ def submit_findings(
                 " location = ?, remote_scope = ?, salary_text = ?, description = ?,"
                 " score = ?, score_breakdown = ?, action = ? WHERE id = ? AND user_id = ?",
                 (
-                    _utcnow_iso(),
+                    utcnow_iso(),
                     merged["title"],
                     merged.get("company_name"),
                     merged.get("location"),

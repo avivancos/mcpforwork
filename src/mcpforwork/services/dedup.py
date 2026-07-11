@@ -17,16 +17,12 @@ Signatures are ``(uow, user_id, ...)``; the caller owns the transaction.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from typing import Any
 
 from mcpforwork.domain.dedup import dedup_hash
 from mcpforwork.ports.db import UnitOfWork
 from mcpforwork.services import audit
-
-
-def _utcnow_iso() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+from mcpforwork.services.clock import utcnow_iso
 
 
 def check_seen(uow: UnitOfWork, user_id: int, urls: Sequence[str]) -> dict[str, Any]:
@@ -114,7 +110,7 @@ def record_application(
         return {"error": "record_application needs a url"}
     channel = (channel or "external").strip()
     digest = dedup_hash(url)
-    when = applied_at or _utcnow_iso()
+    when = applied_at or utcnow_iso()
 
     # Link to a scouted finding of the same posting when the caller did not name
     # one, so the external application and the finding stay tied.
