@@ -1,0 +1,69 @@
+pack:
+  id: es
+  version: 1
+  kind: country
+  title: Spain job boards
+
+# Country code ISO-3166 alpha-2 ES. Spanish-language portals still accept an
+# English (or any) {query}. Every url_template below was browser-verified to
+# return real listings for "data engineer" (quote_plus -> data+engineer).
+sources:
+  - slug: infojobs
+    name: InfoJobs
+    base_url: https://www.infojobs.net
+    countries: [ES]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.infojobs.net/jobsearch/search-results/list.xhtml?keyword={query}"
+      result_hint: "Spain's largest board. Left rail filters by provincia/teletrabajo."
+
+  - slug: indeed-es
+    name: Indeed (España)
+    base_url: https://es.indeed.com
+    countries: [ES]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://es.indeed.com/jobs?q={query}"
+      result_hint: "Add &l=<ciudad> for location; results paginate at the bottom."
+
+  - slug: adzuna-es
+    name: Adzuna (España)
+    base_url: https://www.adzuna.es
+    countries: [ES]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.adzuna.es/search?q={query}"
+      result_hint: "Aggregator across ES boards; add &w=<localidad> for a place."
+
+  - slug: tecnoempleo
+    name: Tecnoempleo
+    base_url: https://www.tecnoempleo.com
+    countries: [ES]
+    sectors: [tech]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.tecnoempleo.com/ofertas-trabajo/?te={query}"
+      result_hint: "Spain's main tech/IT board; toggle 'Teletrabajo' in filters."
+
+  - slug: linkedin-es
+    name: LinkedIn Jobs (España)
+    base_url: https://www.linkedin.com
+    countries: [ES]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.linkedin.com/jobs/search/?keywords={query}&location=Spain"
+      result_hint: "Usually requires login; the human signs in in their own browser."

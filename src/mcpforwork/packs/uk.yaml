@@ -1,0 +1,57 @@
+pack:
+  id: uk
+  version: 1
+  kind: country
+  title: United Kingdom job boards
+
+# Country code is ISO-3166 alpha-2 GB (the client normalizes user-typed "UK" ->
+# GB at intake). Every search_playbook.url_template below was browser-verified to
+# return real listings for the query "data engineer" (quote_plus -> data+engineer).
+sources:
+  - slug: indeed-uk
+    name: Indeed (UK)
+    base_url: https://uk.indeed.com
+    countries: [GB]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://uk.indeed.com/jobs?q={query}"
+      result_hint: "Add &l=<city/postcode> for location; results paginate at the bottom."
+
+  - slug: reed
+    name: Reed
+    base_url: https://www.reed.co.uk
+    countries: [GB]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.reed.co.uk/jobs?keywords={query}"
+      result_hint: "Add &locationName=<city> to narrow; 'Easy Apply' cards apply on-site."
+
+  - slug: adzuna-uk
+    name: Adzuna (UK)
+    base_url: https://www.adzuna.co.uk
+    countries: [GB]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.adzuna.co.uk/search?q={query}"
+      result_hint: "Aggregator across UK boards; add &w=<location> for a place."
+
+  - slug: linkedin-uk
+    name: LinkedIn Jobs (UK)
+    base_url: https://www.linkedin.com
+    countries: [GB]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.linkedin.com/jobs/search/?keywords={query}&location=United%20Kingdom"
+      result_hint: "Usually requires login; the human signs in in their own browser."
