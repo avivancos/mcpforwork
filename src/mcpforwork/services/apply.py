@@ -238,6 +238,125 @@ def resolve_field(
     }
 
 
+OUTCOMES = frozenset({"no_reply", "rejected", "interview", "offer", "hired"})
+
+
+def request_submit(
+    uow: UnitOfWork, user_id: int, application_id: int, summary: str = ""
+) -> dict[str, Any]:
+    """THE consent gate — the only path toward submission.
+
+    Consent level 0 (the only level until the S7 autopilot card): the decision
+    is ALWAYS `await_human`. The client shows the filled form; the human clicks
+    Submit themselves, then the client calls confirm_submitted."""
+    app = _load_application(uow, user_id, application_id)
+    if app is None:
+        return {"error": f"application {application_id} not found"}
+    if app["state"] != "awaiting_human":
+        return {"error": f"application is '{app['state']}' — finish the steps first"}
+    audit.record(
+        uow,
+        user_id,
+        "request_submit",
+        {
+            "application_id": application_id,
+            "summary": summary,
+            "consent_level": app["consent_level"],
+        },
+    )
+    return {
+        "decision": "await_human",
+        "instruction": (
+            "Show the human the filled form now. THE HUMAN clicks Submit in their "
+            "browser. After they confirm it went through, call "
+            "confirm_submitted(application_id, evidence)."
+        ),
+        "application_id": application_id,
+    }
+
+
+def confirm_submitted(
+    uow: UnitOfWork, user_id: int, application_id: int, evidence: str = ""
+) -> dict[str, Any]:
+    """The human confirmed they submitted: close the loop — state, dedup record,
+    finding flip, audit trail."""
+    app = _load_application(uow, user_id, application_id)
+    if app is None:
+        return {"error": f"application {application_id} not found"}
+    if app["state"] != "awaiting_human":
+        return {"error": f"application is '{app['state']}' — request_submit first"}
+    match = hunt.get_match(uow, user_id, app["finding_id"])
+    uow.execute(
+        "UPDATE applications SET state = 'submitted', evidence = ?, updated_at = ?"
+        " WHERE id = ? AND user_id = ?",
+        (evidence or None, _utcnow_iso(), application_id, user_id),
+    )
+    from mcpforwork.services import dedup as dedup_service  # local: avoid cycle
+
+    recorded = dedup_service.record_application(
+        uow,
+        user_id,
+        url=match["url"],
+        channel="browser_supervised",
+        title=match.get("title") or "",
+        company_name=match.get("company_name") or "",
+        finding_id=app["finding_id"],
+        notes=f"application {application_id}",
+    )
+    audit.record(
+        uow,
+        user_id,
+        "confirm_submitted",
+        {"application_id": application_id, "evidence": bool(evidence)},
+    )
+    return {
+        "ok": True,
+        "state": "submitted",
+        "application_id": application_id,
+        "external_application_id": recorded.get("external_application_id"),
+    }
+
+
+def record_outcome(
+    uow: UnitOfWork, user_id: int, application_id: int, outcome: str, notes: str = ""
+) -> dict[str, Any]:
+    """Store what actually happened — the calibration loop's raw data."""
+    if outcome not in OUTCOMES:
+        return {"error": f"outcome must be one of {sorted(OUTCOMES)}"}
+    app = _load_application(uow, user_id, application_id)
+    if app is None:
+        return {"error": f"application {application_id} not found"}
+    uow.execute(
+        "UPDATE applications SET outcome = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+        (outcome, _utcnow_iso(), application_id, user_id),
+    )
+    audit.record(
+        uow,
+        user_id,
+        "record_outcome",
+        {"application_id": application_id, "outcome": outcome, "notes": notes},
+    )
+    return {"ok": True, "application_id": application_id, "outcome": outcome}
+
+
+def get_asset_file(uow: UnitOfWork, user_id: int, asset_id: int) -> dict[str, Any]:
+    """Write the asset to a local file for form uploads (self-host path; hosted
+    signed URLs arrive with the hosted sprint)."""
+    from mcpforwork import config  # lazy: config is entrypoint-facing
+
+    row = uow.fetchone(
+        "SELECT id, asset_type, content FROM generated_assets WHERE id = ? AND user_id = ?",
+        (asset_id, user_id),
+    )
+    if row is None:
+        return {"error": f"asset {asset_id} not found"}
+    directory = config.data_dir() / "assets"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{row['id']}_{row['asset_type']}.md"
+    path.write_text(row["content"])
+    return {"ok": True, "path": str(path), "asset_type": row["asset_type"]}
+
+
 def save_form_answer(
     uow: UnitOfWork, user_id: int, field_label: str, answer: str
 ) -> dict[str, Any]:

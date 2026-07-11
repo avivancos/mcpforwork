@@ -48,6 +48,12 @@ _NEXT_ACTIONS: dict[str, str] = {
     "report_apply_progress": "Follow the returned next_step / repair / pause instruction.",
     "resolve_field": ("Use the answer as given; on ask_user, ask the human then save_form_answer."),
     "save_form_answer": "Answer saved — fill the field and continue the steps.",
+    "request_submit": (
+        "Show the human the filled form; THEY click Submit. Then confirm_submitted."
+    ),
+    "confirm_submitted": "Recorded. Optionally record_outcome later; back to /review.",
+    "record_outcome": "Noted for calibration. Back to /review or /hunt.",
+    "get_asset_file": "Upload this file where the form asks for it.",
     "list_matches": "Run /review with the human: approve_match or discard_match each.",
     "approve_match": "Run /apply: get_generation_brief to draft materials.",
     "discard_match": "Back to list_matches for the next one.",

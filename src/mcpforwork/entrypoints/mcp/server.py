@@ -480,6 +480,65 @@ def save_form_answer(field_label: str, answer: str) -> str:
 
 
 @mcp.tool()
+def request_submit(application_id: int, summary: str = "") -> str:
+    """THE consent gate. Ask permission to move to submission: at consent level
+    0 the answer is always await_human — show the filled form; the HUMAN clicks
+    Submit."""
+    uow, user_id = _uow()
+    try:
+        result = apply_service.request_submit(uow, user_id, application_id, summary)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("request_submit", result)
+
+
+@mcp.tool()
+def confirm_submitted(application_id: int, evidence: str = "") -> str:
+    """AFTER the human confirms they clicked Submit: close the loop (state,
+    dedup record, audit)."""
+    uow, user_id = _uow()
+    try:
+        result = apply_service.confirm_submitted(uow, user_id, application_id, evidence)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("confirm_submitted", result)
+
+
+@mcp.tool()
+def record_outcome(application_id: int, outcome: str, notes: str = "") -> str:
+    """Record what happened (no_reply|rejected|interview|offer|hired) — feeds
+    calibration."""
+    uow, user_id = _uow()
+    try:
+        result = apply_service.record_outcome(uow, user_id, application_id, outcome, notes)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("record_outcome", result)
+
+
+@mcp.tool()
+def get_asset_file(asset_id: int) -> str:
+    """A local file path for the asset (for form uploads)."""
+    uow, user_id = _uow()
+    try:
+        result = apply_service.get_asset_file(uow, user_id, asset_id)
+    finally:
+        uow.close()
+    if "error" in result:
+        return _fail(result["error"])
+    return _ok("get_asset_file", result)
+
+
+@mcp.tool()
 def record_application(url: str, channel: str = "", method: str = "", notes: str = "") -> str:
     """Record that the HUMAN submitted an application (any channel) so the
     copilot never re-surfaces the posting. Idempotent per URL."""

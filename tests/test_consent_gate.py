@@ -1,0 +1,121 @@
+"""request_submit L0 consent gate + confirm_submitted + outcomes (S4.3).
+
+THE invariant: at consent level 0 request_submit ALWAYS awaits the human;
+no code path in this sprint yields submit_authorized.
+"""
+
+import inspect
+from pathlib import Path
+
+from mcpforwork import config
+from mcpforwork.adapters.db.backend import SqlUnitOfWork
+from mcpforwork.services import apply as apply_service
+from mcpforwork.services import assets, dedup, hunt, profiles, review
+
+_URL = "https://x.com/jobs/1"
+
+
+def _ready_app(uow: SqlUnitOfWork) -> tuple[int, int, int]:
+    uid = uow.insert("INSERT INTO users (email) VALUES (?)", ("u@example.com",))
+    profiles.create_profile(
+        uow,
+        uid,
+        {"full_name": "Ada", "contact_email": "a@x.com", "target_titles": ["Data Engineer"]},
+    )
+    hunt.submit_findings(uow, uid, "weworkremotely", [{"url": _URL, "title": "Data Engineer"}])
+    fid = hunt.list_matches(uow, uid, min_score=0)[0]["id"]
+    review.approve_match(uow, uid, fid)
+    session = apply_service.start_application(uow, uid, fid)
+    app_id = session["application_id"]
+    for step in session["steps"]:
+        apply_service.report_apply_progress(uow, uid, app_id, step["step_id"], "ok")
+    uow.commit()
+    return uid, fid, app_id
+
+
+def test_request_submit_at_l0_always_awaits_the_human(uow: SqlUnitOfWork) -> None:
+    uid, _, app_id = _ready_app(uow)
+    result = apply_service.request_submit(uow, uid, app_id, summary="filled form shown")
+    uow.commit()
+    assert result["decision"] == "await_human"
+    assert "submit_authorized" not in str(result)
+    audit = uow.fetchone(
+        "SELECT detail FROM audit_log WHERE action = 'request_submit' AND user_id = ?", (uid,)
+    )
+    assert "filled form shown" in audit["detail"]
+
+
+def test_no_source_path_yields_submit_authorized_this_sprint() -> None:
+    # Structural: the string that would authorize a submit exists nowhere in the
+    # service source until the S7 autopilot policy card introduces it with
+    # policy checks.
+    source = inspect.getsource(apply_service)
+    assert "submit_authorized" not in source
+
+
+def test_request_submit_requires_awaiting_human_state(uow: SqlUnitOfWork) -> None:
+    uid = uow.insert("INSERT INTO users (email) VALUES (?)", ("v@example.com",))
+    profiles.create_profile(uow, uid, {"target_titles": ["Data Engineer"]})
+    hunt.submit_findings(uow, uid, "weworkremotely", [{"url": "https://y.com/2", "title": "DE"}])
+    fid = hunt.list_matches(uow, uid, min_score=0)[0]["id"]
+    review.approve_match(uow, uid, fid)
+    app_id = apply_service.start_application(uow, uid, fid)["application_id"]  # still filling
+    uow.commit()
+    assert "error" in apply_service.request_submit(uow, uid, app_id)
+
+
+def test_confirm_submitted_flips_state_and_records_the_application(uow: SqlUnitOfWork) -> None:
+    uid, fid, app_id = _ready_app(uow)
+    apply_service.request_submit(uow, uid, app_id)
+    result = apply_service.confirm_submitted(uow, uid, app_id, evidence="confirmation page seen")
+    uow.commit()
+    assert result["state"] == "submitted"
+    # The dedup gate now knows the URL…
+    item = dedup.check_seen(uow, uid, [_URL])["items"][0]
+    assert item["applied"] is True
+    # …the finding is terminal, and evidence is stored.
+    row = uow.fetchone("SELECT state, evidence FROM applications WHERE id = ?", (app_id,))
+    assert row["state"] == "submitted"
+    assert "confirmation" in row["evidence"]
+
+
+def test_confirm_without_await_state_errors(uow: SqlUnitOfWork) -> None:
+    uid = uow.insert("INSERT INTO users (email) VALUES (?)", ("w@example.com",))
+    profiles.create_profile(uow, uid, {"target_titles": ["DE"]})
+    hunt.submit_findings(uow, uid, "weworkremotely", [{"url": "https://z.com/3", "title": "DE"}])
+    fid = hunt.list_matches(uow, uid, min_score=0)[0]["id"]
+    review.approve_match(uow, uid, fid)
+    app_id = apply_service.start_application(uow, uid, fid)["application_id"]
+    uow.commit()
+    assert "error" in apply_service.confirm_submitted(uow, uid, app_id)
+
+
+def test_record_outcome_persists_and_validates(uow: SqlUnitOfWork) -> None:
+    uid, _, app_id = _ready_app(uow)
+    apply_service.request_submit(uow, uid, app_id)
+    apply_service.confirm_submitted(uow, uid, app_id)
+    assert "error" in apply_service.record_outcome(uow, uid, app_id, "ghosted-ish")
+    result = apply_service.record_outcome(uow, uid, app_id, "interview", notes="phone screen")
+    uow.commit()
+    assert result["ok"] is True
+    assert (
+        uow.fetchone("SELECT outcome FROM applications WHERE id = ?", (app_id,))["outcome"]
+        == "interview"
+    )
+
+
+def test_get_asset_file_writes_under_data_dir(
+    uow: SqlUnitOfWork, tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("MCPFORWORK_DATA_DIR", str(tmp_path / "data"))
+    uid, fid, _ = _ready_app(uow)
+    aid = assets.submit_asset(uow, uid, fid, "cv", "# Ada CV")["asset_id"]
+    uow.commit()
+    result = apply_service.get_asset_file(uow, uid, aid)
+    path = Path(result["path"])
+    assert path.is_file()
+    assert path.read_text() == "# Ada CV"
+    assert str(config.data_dir()) in str(path)
+    # foreign asset rejected
+    other = uow.insert("INSERT INTO users (email) VALUES (?)", ("b@example.com",))
+    assert "error" in apply_service.get_asset_file(uow, other, aid)
