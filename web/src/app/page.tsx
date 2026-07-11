@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CopyButton } from "@/components/CopyButton";
 import { Logo } from "@/components/Logo";
+import { FAQ_FLAT } from "@/content/faq";
 import styles from "./landing.module.css";
 
 const HOW = [
@@ -61,41 +62,6 @@ const QUOTES = [
   {
     quote: "“Autopilot with a daily cap and an allowlist is the first automation I actually trust.”",
     who: "Frontend developer, remote LATAM",
-  },
-];
-
-const FAQ = [
-  {
-    q: "Do I need an API key?",
-    a: "No. Your Claude or ChatGPT subscription is the brain. We never proxy, meter, or bill tokens.",
-  },
-  {
-    q: "Does it apply without me?",
-    a: "Only if you turn Autopilot (L2) on, under a policy you set: minimum score, daily cap, allowlisted sites. The default is L0 — you click Submit.",
-  },
-  {
-    q: "What about captchas?",
-    a: "You solve them. It never bypasses or automates a captcha — applications run in your own browser session.",
-  },
-  {
-    q: "Is self-host the full product?",
-    a: "Yes — open-core parity. Same features on your machine with SQLite. $5/mo buys convenience, not capability.",
-  },
-  {
-    q: "Which AI clients work?",
-    a: "Claude connectors, Claude Desktop (.mcpb), Claude Code, ChatGPT connectors, Codex CLI.",
-  },
-  {
-    q: "Where is my data?",
-    a: "Self-hosted: it never leaves your machine. Hosted: export everything as JSON or delete your account, any time. GDPR-clean.",
-  },
-  {
-    q: "Why only $5?",
-    a: "Because $5 pays for infrastructure — sync, backups, live pack updates. Not token resale. Your AI does the expensive part.",
-  },
-  {
-    q: "Is my salary floor shared?",
-    a: "Never disclosed without your consent. It's a private field, used only to filter matches.",
   },
 ];
 
@@ -636,13 +602,21 @@ export default function LandingPage() {
         {/* FAQ */}
         <section className={`${styles.section} ${styles.sectionWhite} ${styles.faq}`} id="faq">
           <h2 className={styles.h2}>Fair questions</h2>
-          <div className={styles.faqList}>
-            {FAQ.map((f) => (
-              <div key={f.q} className={styles.faqItem}>
-                <span className={styles.faqQ}>{f.q}</span>
-                <span className={styles.faqA}>{f.a}</span>
-              </div>
-            ))}
+          <div>
+            <div className={styles.faqList}>
+              {FAQ_FLAT.map((f) => (
+                <div key={f.q} className={styles.faqItem}>
+                  <span className={styles.faqQ}>{f.q}</span>
+                  <span className={styles.faqA}>{f.a}</span>
+                </div>
+              ))}
+            </div>
+            <Link
+              href="/faq"
+              style={{ display: "inline-block", marginTop: 20, color: "var(--accent)", fontWeight: 500, fontSize: 14 }}
+            >
+              Read the full FAQ →
+            </Link>
           </div>
         </section>
 
@@ -669,6 +643,7 @@ export default function LandingPage() {
             <div className={styles.footerLinks}>
               <a href="https://github.com/mcpforwork">GitHub</a>
               <Link href="/docs">Docs</Link>
+              <Link href="/faq">FAQ</Link>
               <a href="#faq">Privacy</a>
               <a href="#faq">Terms</a>
               <a href="mailto:hello@mcpfor.work">Contact</a>

@@ -286,6 +286,32 @@
   color: var(--accent);
 }
 
+.nextCardRight {
+  text-align: right;
+  align-items: flex-end;
+}
+
+/* coming-soon sidebar items (Reference + Self-hosting until W2.2) */
+.itemSoon {
+  color: var(--ink-4);
+  cursor: default;
+}
+
+.itemSoon:hover {
+  color: var(--ink-4);
+}
+
+.soon {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
 /* toc */
 .toc {
   padding: 40px 28px 48px 20px;
