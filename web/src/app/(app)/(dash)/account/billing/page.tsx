@@ -7,8 +7,13 @@ import { BillingActions } from "./BillingActions";
 
 export const metadata = { title: "Billing — mcpfor.work" };
 
-export default async function BillingPage() {
-  const subscription = await api.getSubscription();
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkout?: string }>;
+}) {
+  const [{ checkout }, subscription] = await Promise.all([searchParams, api.getSubscription()]);
+  const trial = subscription.status === "trial";
 
   return (
     <>
@@ -16,11 +21,22 @@ export default async function BillingPage() {
       <div className={dashStyles.content}>
         <div className={styles.col}>
           <AccountNav />
+
+          {checkout === "success" && (
+            <div className={styles.successBanner}>
+              <strong style={{ fontWeight: 600 }}>You&rsquo;re subscribed.</strong> Thanks for
+              supporting mcpfor.work — your pipeline keeps running. Manage your plan any time below.
+            </div>
+          )}
+          {checkout === "canceled" && (
+            <div className={styles.cancelBanner}>
+              Checkout canceled — no charge was made. You can subscribe whenever you&rsquo;re ready.
+            </div>
+          )}
+
           <div className={styles.card}>
             <span className={styles.cardTitle}>
-              {subscription.status === "trial"
-                ? `Free trial — ${subscription.trialDaysLeft} days left`
-                : "Hosted plan"}
+              {trial ? `Free trial — ${subscription.trialDaysLeft} days left` : "Hosted plan — active"}
             </span>
             <div className={styles.price}>
               <span className={styles.priceValue}>$5</span>
@@ -37,12 +53,22 @@ export default async function BillingPage() {
                 <span className={styles.checkMark}>✓</span>Web dashboard + daily digest email
               </span>
             </div>
+
+            {trial && (
+              <div className={styles.trialNudge}>
+                Your free trial ends in <strong style={{ fontWeight: 600 }}>{subscription.trialDaysLeft} days</strong>.
+                Subscribe to keep your matches, drafts, and pipeline after it&rsquo;s up — cancel any
+                time.
+              </div>
+            )}
+
             <BillingActions status={subscription.status} />
             <span className={styles.note}>
               No seats. No token markup. Your Claude or ChatGPT subscription does the thinking —
               $5 pays for infrastructure, not token resale.
             </span>
           </div>
+
           <span className={styles.note}>
             Prefer self-hosting? The full product is free forever on your machine —{" "}
             <span className="code-chip">uvx mcpforwork</span>.

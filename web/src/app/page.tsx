@@ -81,7 +81,7 @@ export default function LandingPage() {
           <Logo size={16} />
           <div className={styles.navLinks}>
             <a href="#how">How it works</a>
-            <a href="#pricing">Pricing</a>
+            <Link href="/pricing">Pricing</Link>
             <a href="#faq">FAQ</a>
             <a href="https://github.com/mcpforwork">GitHub</a>
             <Link href="/pipeline" className={styles.ctaSecondary} style={{ padding: "8px 16px", fontSize: 13.5 }}>
