@@ -90,6 +90,38 @@ def test_confirm_without_await_state_errors(uow: SqlUnitOfWork) -> None:
     assert "error" in apply_service.confirm_submitted(uow, uid, app_id)
 
 
+def test_submitted_application_cannot_regress_to_awaiting_human(uow: SqlUnitOfWork) -> None:
+    # Gate P1 regression: re-reporting the last step ok after submission must be
+    # rejected — the machine forbids submitted -> awaiting_human.
+    uid, _, app_id = _ready_app(uow)
+    apply_service.request_submit(uow, uid, app_id)
+    apply_service.confirm_submitted(uow, uid, app_id)
+    uow.commit()
+    last_step = apply_service._load_application(uow, uid, app_id)["steps"][-1]
+    result = apply_service.report_apply_progress(uow, uid, app_id, last_step["step_id"], "ok")
+    assert "error" in result
+    state = uow.fetchone("SELECT state FROM applications WHERE id = ?", (app_id,))["state"]
+    assert state == "submitted"  # unchanged
+
+
+def test_confirm_without_request_submit_is_rejected(uow: SqlUnitOfWork) -> None:
+    # The audit trail must always carry request_submit before confirm_submitted.
+    uid, _, app_id = _ready_app(uow)  # awaiting_human, but no request yet
+    assert "error" in apply_service.confirm_submitted(uow, uid, app_id)
+
+
+def test_double_confirm_is_rejected(uow: SqlUnitOfWork) -> None:
+    uid, _, app_id = _ready_app(uow)
+    apply_service.request_submit(uow, uid, app_id)
+    apply_service.confirm_submitted(uow, uid, app_id)
+    assert "error" in apply_service.confirm_submitted(uow, uid, app_id)
+
+
+def test_outcome_before_submission_is_rejected(uow: SqlUnitOfWork) -> None:
+    uid, _, app_id = _ready_app(uow)  # awaiting_human, not submitted
+    assert "error" in apply_service.record_outcome(uow, uid, app_id, "interview")
+
+
 def test_record_outcome_persists_and_validates(uow: SqlUnitOfWork) -> None:
     uid, _, app_id = _ready_app(uow)
     apply_service.request_submit(uow, uid, app_id)

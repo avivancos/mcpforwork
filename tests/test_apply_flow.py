@@ -64,10 +64,13 @@ def test_build_steps_never_emits_a_submit_step() -> None:
 def test_transitions_enforced() -> None:
     assert can_transition("draft", "filling")
     assert can_transition("filling", "awaiting_human")
-    assert can_transition("awaiting_human", "submitted")
+    assert can_transition("awaiting_human", "submit_requested")  # via request_submit only
+    assert can_transition("submit_requested", "submitted")
     assert can_transition("submitted", "verified")
     assert not can_transition("draft", "submitted")  # cannot skip the human
+    assert not can_transition("awaiting_human", "submitted")  # confirm needs a request first
     assert not can_transition("submitted", "filling")
+    assert not can_transition("submitted", "awaiting_human")  # no post-submit regression
     assert "submitted" not in ALLOWED_TRANSITIONS["draft"]
 
 

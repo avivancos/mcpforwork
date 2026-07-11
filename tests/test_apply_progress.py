@@ -78,6 +78,39 @@ def test_out_of_order_or_foreign_reports_rejected(uow: SqlUnitOfWork) -> None:
     )
 
 
+def test_resolve_field_never_answers_third_party_labels(uow: SqlUnitOfWork) -> None:
+    # Gate P1 regression: "Company name" / "Hiring manager name" must NOT be
+    # answered with the candidate's own data — never invent.
+    uid, app_id, _ = _session(uow)
+    for label in (
+        "Company name",
+        "Hiring manager name",
+        "Referral email (if any)",
+        "Name of your current employer",
+    ):
+        result = apply_service.resolve_field(uow, uid, app_id, label)
+        assert result.get("ask_user") is True, label
+
+
+def test_saved_answer_overrides_the_label_heuristic(uow: SqlUnitOfWork) -> None:
+    # A human-confirmed answer must win even for a label the heuristic matches.
+    uid, app_id, _ = _session(uow)
+    apply_service.save_form_answer(uow, uid, "Email", "work-alias@x.com")
+    uow.commit()
+    assert apply_service.resolve_field(uow, uid, app_id, "Email")["answer"] == "work-alias@x.com"
+
+
+def test_every_progress_report_is_audited(uow: SqlUnitOfWork) -> None:
+    uid, app_id, session = _session(uow)
+    apply_service.report_apply_progress(uow, uid, app_id, session["steps"][0]["step_id"], "ok")
+    uow.commit()
+    rows = uow.fetchall(
+        "SELECT detail FROM audit_log WHERE user_id = ? AND action = 'report_apply_progress'",
+        (uid,),
+    )
+    assert len(rows) == 1
+
+
 def test_resolve_field_answers_from_profile(uow: SqlUnitOfWork) -> None:
     uid, app_id, _ = _session(uow)
     result = apply_service.resolve_field(uow, uid, app_id, "Email address")

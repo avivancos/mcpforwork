@@ -89,3 +89,21 @@ decisions had to be fixed before any code existed.
 - **[still deferred — rule of two]** The entrypoint-independence import contract
   ("entrypoints never import each other") lands when the second entrypoint
   (API/CLI) exists. The guidance-purity contract was added in S2.
+
+## Carried follow-ups (from the S4 final-review gate)
+
+- **[note — hosted PG]** `_today_started_count` compares a UTC day string
+  against `created_at`; correct while PG runs UTC (the test container does).
+  A non-UTC hosted PG shifts the daily-cap window — normalise (timestamptz or
+  set the DB timezone) on the hosted deploy card (S6).
+- **[written rejection — kept vocabulary]** `verify` step kind and the
+  `submitted → verified` transition are defined but not yet wired (the
+  confirmation-page check is a plan feature; 2 tokens, harmless). Wire or drop
+  by S8.
+- **[note]** `applications.apply_method` is write-only until the S8 calibration
+  reads it. `resolve_field(field_type)` param is card-specified, unused today.
+- **[fixed in-gate]** State machine now ENFORCED in services (submit_requested
+  state added: awaiting_human → submit_requested → submitted; no post-submit
+  regression); resolve_field answers only a strict candidate-label allowlist
+  and saved answers take precedence; applications/playbook_reports RLS live
+  tests + S4 tool-layer fresh-connection tests added.

@@ -11,30 +11,40 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from mcpforwork.domain.apply_flow import build_steps
+from mcpforwork import config
+from mcpforwork.domain.apply_flow import build_steps, can_transition
 from mcpforwork.domain.dedup import dedup_hash
 from mcpforwork.packs import registry
 from mcpforwork.ports.db import UnitOfWork
 from mcpforwork.services import assets as assets_service
 from mcpforwork.services import audit, hunt, profiles
+from mcpforwork.services import dedup as dedup_service
+from mcpforwork.services.briefs import ASSET_TYPES
+from mcpforwork.services.clock import utcnow_iso
 
 MAX_APPLICATIONS_PER_DAY = 10
 
-_OPEN_STATES = ("draft", "filling", "awaiting_human")
+_OPEN_STATES = ("draft", "filling", "awaiting_human", "submit_requested")
 
 _OBSTACLES = frozenset({"captcha", "login", "2fa", "hostile_bot_check"})
 
-# Profile fields resolvable from a form label's tokens (deterministic answers).
-_LABEL_TO_FIELD = {
+# Normalized form labels that unambiguously ask about the CANDIDATE, mapped to
+# the profile field that answers them. Anything else goes to saved form_answers
+# or ask_user — a greedy token match ("Company name" ~ name) invented answers.
+_CANDIDATE_LABELS = {
     "name": "full_name",
+    "your name": "full_name",
+    "full name": "full_name",
+    "first and last name": "full_name",
     "email": "contact_email",
+    "e-mail": "contact_email",
+    "email address": "contact_email",
+    "your email": "contact_email",
     "city": "city",
+    "your city": "city",
     "country": "country",
+    "your country": "country",
 }
-
-
-def _utcnow_iso() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _today_started_count(uow: UnitOfWork, user_id: int) -> int:
@@ -134,6 +144,11 @@ def report_apply_progress(
     app = _load_application(uow, user_id, application_id)
     if app is None:
         return {"error": f"application {application_id} not found"}
+    if app["state"] != "filling":
+        # The state machine is enforced here: once the plan is exhausted (or the
+        # application left the filling state) no report can move it — a
+        # submitted application can never regress to awaiting_human.
+        return {"error": f"application is '{app['state']}' — reports only apply while filling"}
     if status not in ("ok", "blocked", "mismatch"):
         return {"error": "status must be ok | blocked | mismatch"}
     steps = app["steps"]
@@ -181,15 +196,16 @@ def report_apply_progress(
     idx = steps.index(current)
     uow.execute(
         "UPDATE applications SET current_step = ?, updated_at = ? WHERE id = ? AND user_id = ?",
-        (current["step_id"], _utcnow_iso(), application_id, user_id),
+        (current["step_id"], utcnow_iso(), application_id, user_id),
     )
     if idx + 1 < len(steps):
         return {"state": app["state"], "next_step": steps[idx + 1]}
     # Plan exhausted: the form is filled and reviewed — the human decides next.
+    assert can_transition(app["state"], "awaiting_human")  # machine-checked write
     uow.execute(
         "UPDATE applications SET state = 'awaiting_human', updated_at = ?"
         " WHERE id = ? AND user_id = ?",
-        (_utcnow_iso(), application_id, user_id),
+        (utcnow_iso(), application_id, user_id),
     )
     return {
         "state": "awaiting_human",
@@ -217,15 +233,19 @@ def resolve_field(
     if profile is None:
         return {"error": "no active profile"}
 
-    label_tokens = {t for t in field_label.lower().replace("*", " ").split() if t}
-    for token, field in _LABEL_TO_FIELD.items():
-        if token in label_tokens and profile.get(field):
-            return {"field_label": field_label, "answer": profile[field], "source": field}
-
+    # 1) A human-confirmed saved answer always wins (exact label match).
     answers: dict[str, str] = json.loads(profile.get("form_answers") or "{}")
     for saved_label, saved_answer in answers.items():
         if saved_label.lower() == field_label.lower():
             return {"field_label": field_label, "answer": saved_answer, "source": "form_answers"}
+
+    # 2) Profile fields only for labels that UNAMBIGUOUSLY ask about the
+    #    candidate (strict allowlist — "Company name" / "Hiring manager name"
+    #    must NEVER be answered with the candidate's own data).
+    normalized = " ".join(field_label.lower().replace("*", " ").split())
+    if profile.get(_CANDIDATE_LABELS.get(normalized, "")):
+        field = _CANDIDATE_LABELS[normalized]
+        return {"field_label": field_label, "answer": profile[field], "source": field}
 
     return {
         "field_label": field_label,
@@ -252,8 +272,13 @@ def request_submit(
     app = _load_application(uow, user_id, application_id)
     if app is None:
         return {"error": f"application {application_id} not found"}
-    if app["state"] != "awaiting_human":
+    if not can_transition(app["state"], "submit_requested"):
         return {"error": f"application is '{app['state']}' — finish the steps first"}
+    uow.execute(
+        "UPDATE applications SET state = 'submit_requested', updated_at = ?"
+        " WHERE id = ? AND user_id = ?",
+        (utcnow_iso(), application_id, user_id),
+    )
     audit.record(
         uow,
         user_id,
@@ -283,16 +308,14 @@ def confirm_submitted(
     app = _load_application(uow, user_id, application_id)
     if app is None:
         return {"error": f"application {application_id} not found"}
-    if app["state"] != "awaiting_human":
+    if not can_transition(app["state"], "submitted"):
         return {"error": f"application is '{app['state']}' — request_submit first"}
     match = hunt.get_match(uow, user_id, app["finding_id"])
     uow.execute(
         "UPDATE applications SET state = 'submitted', evidence = ?, updated_at = ?"
         " WHERE id = ? AND user_id = ?",
-        (evidence or None, _utcnow_iso(), application_id, user_id),
+        (evidence or None, utcnow_iso(), application_id, user_id),
     )
-    from mcpforwork.services import dedup as dedup_service  # local: avoid cycle
-
     recorded = dedup_service.record_application(
         uow,
         user_id,
@@ -326,9 +349,11 @@ def record_outcome(
     app = _load_application(uow, user_id, application_id)
     if app is None:
         return {"error": f"application {application_id} not found"}
+    if app["state"] not in ("submitted", "verified"):
+        return {"error": f"application is '{app['state']}' — outcomes apply after submission"}
     uow.execute(
         "UPDATE applications SET outcome = ?, updated_at = ? WHERE id = ? AND user_id = ?",
-        (outcome, _utcnow_iso(), application_id, user_id),
+        (outcome, utcnow_iso(), application_id, user_id),
     )
     audit.record(
         uow,
@@ -342,18 +367,18 @@ def record_outcome(
 def get_asset_file(uow: UnitOfWork, user_id: int, asset_id: int) -> dict[str, Any]:
     """Write the asset to a local file for form uploads (self-host path; hosted
     signed URLs arrive with the hosted sprint)."""
-    from mcpforwork import config  # lazy: config is entrypoint-facing
-
     row = uow.fetchone(
         "SELECT id, asset_type, content FROM generated_assets WHERE id = ? AND user_id = ?",
         (asset_id, user_id),
     )
     if row is None:
         return {"error": f"asset {asset_id} not found"}
+    if row["asset_type"] not in ASSET_TYPES:  # read-side whitelist (defense in depth)
+        return {"error": f"unexpected asset_type {row['asset_type']!r}"}
     directory = config.data_dir() / "assets"
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{row['id']}_{row['asset_type']}.md"
-    path.write_text(row["content"])
+    path.write_text(row["content"], encoding="utf-8")
     return {"ok": True, "path": str(path), "asset_type": row["asset_type"]}
 
 
