@@ -110,6 +110,18 @@ def test_sources_for_excludes_a_non_matching_sector() -> None:
     assert "germantechjobs" in tech
 
 
+def test_no_shipped_template_puts_the_query_in_the_url_path() -> None:
+    # search_url() quote_plus-encodes the query (space -> "+"), which only works
+    # in the query string — a path segment takes the "+" literally. This guards
+    # the bug class that got Totaljobs/CV-Library dropped and stepstone-de fixed:
+    # every shipped url_template must be query-param style ({query} after "?").
+    for slug, src in registry.load_sources().items():
+        before_query = src.url_template.split("?", 1)[0]
+        assert "{query}" not in before_query, (
+            f"{slug}: {{query}} must be in the query string, not the path"
+        )
+
+
 def test_all_shipped_packs_load_and_validate() -> None:
     sources = registry.load_sources()
     assert len(sources) >= 10  # a meaningful seed
