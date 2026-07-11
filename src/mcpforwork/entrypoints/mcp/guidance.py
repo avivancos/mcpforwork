@@ -48,6 +48,10 @@ _NEXT_ACTIONS: dict[str, str] = {
     ),
     "submit_asset": "Run ats_coverage_check(finding_id, asset_id) to spot gaps.",
     "get_assets": "Iterate a draft with get_generation_brief, or run ats_coverage_check.",
+    "ats_coverage_check": (
+        "Add missing_but_have items truthfully; ACKNOWLEDGE genuine_gaps — never "
+        "stuff keywords the facts_inventory cannot prove."
+    ),
 }
 
 

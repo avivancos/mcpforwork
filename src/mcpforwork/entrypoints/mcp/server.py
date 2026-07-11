@@ -20,7 +20,7 @@ from mcpforwork.adapters.db import SqlUnitOfWork, connect
 from mcpforwork.domain.profile import ProfileValidationError
 from mcpforwork.entrypoints.mcp import guidance
 from mcpforwork.entrypoints.mcp.guidance import SERVER_INSTRUCTIONS
-from mcpforwork.services import assets, audit, briefs, dedup, hunt, profiles
+from mcpforwork.services import assets, audit, briefs, coverage, dedup, hunt, profiles
 
 mcp = FastMCP("mcpforwork", instructions=SERVER_INSTRUCTIONS)
 
@@ -365,6 +365,21 @@ def get_assets(finding_id: int, asset_type: str | None = None) -> str:
     finally:
         uow.close()
     return _ok("get_assets", {"count": len(rows), "assets": rows})
+
+
+@mcp.tool()
+def ats_coverage_check(finding_id: int, asset_id: int) -> str:
+    """Deterministic check of the posting's keywords vs a stored draft:
+    covered / missing_but_have (truthfully addable) / genuine_gaps (acknowledge,
+    never stuff)."""
+    uow, user_id = _uow()
+    try:
+        result = coverage.ats_coverage_check(uow, user_id, finding_id, asset_id)
+    finally:
+        uow.close()
+    if "error" in result:
+        return _fail(result["error"])
+    return _ok("ats_coverage_check", result)
 
 
 @mcp.prompt(name="hunt")
