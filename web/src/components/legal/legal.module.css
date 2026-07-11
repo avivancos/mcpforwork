@@ -1,0 +1,169 @@
+/* Legal pages (/privacy /terms /security) — light-only, shared prose. */
+
+.page {
+  background: var(--bg);
+  min-height: 100dvh;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.navRight {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px 96px 24px;
+}
+
+/* draft / counsel-review banner */
+.draft {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-top: 40px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--warn-strong);
+}
+
+.draftLabel {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.head {
+  padding: 28px 0 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.h1 {
+  font-size: 38px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.updated {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.lead {
+  font-size: 16px;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+/* prose */
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin-top: 24px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-margin-top: 24px;
+}
+
+.h2 {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.p {
+  font-size: 14.5px;
+  color: var(--ink-2);
+  line-height: 1.65;
+}
+
+.p strong {
+  font-weight: 600;
+  color: var(--ink-label);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.list li {
+  font-size: 14.5px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  padding-left: 20px;
+  position: relative;
+}
+
+.list li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--ink-4);
+}
+
+.inlineCode {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--stone-chip-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 6px;
+  color: var(--ink);
+}
+
+.crossLinks {
+  margin-top: 40px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  display: flex;
+  gap: 18px;
+  font-size: 13.5px;
+  flex-wrap: wrap;
+}
+
+.crossLinks a {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .h1 {
+    font-size: 30px;
+  }
+}

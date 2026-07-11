@@ -644,8 +644,9 @@ export default function LandingPage() {
               <a href="https://github.com/mcpforwork">GitHub</a>
               <Link href="/docs">Docs</Link>
               <Link href="/faq">FAQ</Link>
-              <a href="#faq">Privacy</a>
-              <a href="#faq">Terms</a>
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/terms">Terms</Link>
+              <Link href="/security">Security</Link>
               <a href="mailto:hello@mcpfor.work">Contact</a>
             </div>
           </div>
