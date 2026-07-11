@@ -121,6 +121,9 @@ def submit_findings(
     profile = profiles.get_profile(uow, user_id) or {}
     stats = {"submitted": len(findings), "new": 0, "seen_again": 0, "skipped": 0}
     for raw in findings:
+        if not isinstance(raw, Mapping):
+            stats["skipped"] += 1
+            continue
         url = (raw.get("url") or "").strip()
         title = (raw.get("title") or "").strip()
         if not title or not url.startswith(("http://", "https://")):

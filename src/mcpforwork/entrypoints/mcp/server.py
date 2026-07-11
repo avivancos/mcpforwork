@@ -10,6 +10,8 @@ import importlib.metadata
 import json
 import os
 import sys
+from datetime import date, datetime
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -40,14 +42,27 @@ def _ensure_local_user(uow: SqlUnitOfWork, user_id: int) -> None:
 def _uow() -> tuple[SqlUnitOfWork, int]:
     """Open a migrated, tenant-scoped UnitOfWork for the self-host user."""
     uow = connect(config.db_url())
-    user_id = config.local_user_id()
-    _ensure_local_user(uow, user_id)
-    uow.set_user_context(user_id)
+    try:
+        user_id = config.local_user_id()
+        _ensure_local_user(uow, user_id)
+        uow.set_user_context(user_id)
+    except BaseException:
+        uow.close()  # never leak the connection if setup fails
+        raise
     return uow, user_id
 
 
 def _tool_names() -> list[str]:
     return sorted(t.name for t in mcp._tool_manager.list_tools())
+
+
+def _json_default(obj: Any) -> str:
+    """Serialize values json.dumps cannot — notably Postgres TIMESTAMP columns,
+    which deserialize to datetime (SQLite returns ISO strings). Both dialects
+    emit ISO-8601 strings, so tool payloads are dialect-neutral."""
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    return str(obj)
 
 
 def _fail(message: str) -> str:
@@ -56,7 +71,7 @@ def _fail(message: str) -> str:
 
 def _ok(tool: str, payload: dict) -> str:
     payload["next_action"] = guidance.next_action(tool)
-    return json.dumps(payload)
+    return json.dumps(payload, default=_json_default)
 
 
 def _active_pid(uow: SqlUnitOfWork, user_id: int) -> int | None:
@@ -79,7 +94,8 @@ def server_info() -> str:
             "tools": _tool_names(),
             "invariants": INVARIANTS,
             "next_action": guidance.next_action("server_info"),
-        }
+        },
+        default=_json_default,
     )
 
 
@@ -242,12 +258,8 @@ def hunt_plan() -> str:
 
 @mcp.tool()
 def source_playbook(slug: str, query: str = "") -> str:
-    """The full search + apply playbook for one source."""
-    uow, _ = _uow()
-    try:
-        playbook = hunt.source_playbook(slug, query)
-    finally:
-        uow.close()
+    """The full search + apply playbook for one source. Pack data only — no DB."""
+    playbook = hunt.source_playbook(slug, query)
     if "error" in playbook:
         return _fail(playbook["error"])
     return _ok("source_playbook", playbook)
@@ -255,12 +267,9 @@ def source_playbook(slug: str, query: str = "") -> str:
 
 @mcp.tool()
 def list_sources(countries: list[str] | None = None, sectors: list[str] | None = None) -> str:
-    """List enabled sources, optionally filtered by country/sector tags."""
-    uow, _ = _uow()
-    try:
-        sources = hunt.list_sources(countries, sectors)
-    finally:
-        uow.close()
+    """List enabled sources, optionally filtered by country/sector tags. Pack
+    data only — no DB."""
+    sources = hunt.list_sources(countries, sectors)
     return _ok("list_sources", {"count": len(sources), "sources": sources})
 
 

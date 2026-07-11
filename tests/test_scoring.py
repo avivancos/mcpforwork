@@ -61,7 +61,20 @@ def test_score_is_bounded_0_to_100() -> None:
     assert 0 <= score <= 100
 
 
-def test_determine_action_thresholds() -> None:
-    assert determine_action(80) == "strong"
-    assert determine_action(50) == "review"
-    assert determine_action(10) == "new"
+def test_determine_action_at_threshold_boundaries() -> None:
+    assert determine_action(70) == "strong"
+    assert determine_action(69) == "review"
+    assert determine_action(40) == "review"
+    assert determine_action(39) == "new"
+
+
+def test_each_signal_dimension_contributes_independently() -> None:
+    profile = {"target_titles": ["Data Analyst"], "work_modes": ["remote"], "seniority": "senior"}
+    base = {"title": "Data Analyst", "description": "reporting"}
+    base_score = score_finding(base, profile)[0]
+    assert score_finding({**base, "remote_scope": "remote"}, profile)[0] == base_score + 10
+    assert score_finding({**base, "salary_text": "$90k"}, profile)[0] == base_score + 8
+    assert (
+        score_finding({"title": "Senior Data Analyst", "description": "reporting"}, profile)[0]
+        == base_score + 10
+    )

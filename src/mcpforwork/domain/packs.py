@@ -76,8 +76,16 @@ def _validate_source(src: Any, where: str, seen_slugs: set[str]) -> list[str]:
         errors.append(f"{where}.search_playbook is required")
     else:
         template = playbook.get("url_template")
-        if not isinstance(template, str) or "{query}" not in template:
-            errors.append(f"{where}.search_playbook.url_template must contain '{{query}}'")
+        if not isinstance(template, str):
+            errors.append(f"{where}.search_playbook.url_template is required")
+        else:
+            # Packs are untrusted input: the template is handed to the user's
+            # browser to open, so its scheme must be http(s) — never javascript:
+            # / data: / other schemes.
+            if not template.startswith(("http://", "https://")):
+                errors.append(f"{where}.search_playbook.url_template must be an http(s) URL")
+            if "{query}" not in template:
+                errors.append(f"{where}.search_playbook.url_template must contain '{{query}}'")
 
     apply_pb = src.get("apply_playbook")
     if apply_pb is not None:

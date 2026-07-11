@@ -64,6 +64,52 @@ def test_bad_pack_kind_is_rejected() -> None:
     assert any("kind" in e for e in validate_pack(bad))
 
 
+def test_non_http_url_template_is_rejected() -> None:
+    # Packs are untrusted input; a javascript:/data: template must be rejected.
+    bad = copy.deepcopy(_VALID)
+    bad["sources"][0]["search_playbook"]["url_template"] = "javascript:alert(1)?q={query}"
+    assert any("http" in e for e in validate_pack(bad))
+
+
+def test_non_mapping_pack_is_rejected() -> None:
+    assert validate_pack([1, 2, 3])
+
+
+def test_missing_pack_block_is_rejected() -> None:
+    assert any("pack" in e for e in validate_pack({"sources": _VALID["sources"]}))
+
+
+def test_non_integer_version_is_rejected() -> None:
+    bad = copy.deepcopy(_VALID)
+    bad["pack"]["version"] = "one"
+    assert any("version" in e for e in validate_pack(bad))
+
+
+def test_empty_sources_is_rejected() -> None:
+    assert any("sources" in e for e in validate_pack({"pack": _VALID["pack"], "sources": []}))
+
+
+def test_non_http_base_url_is_rejected() -> None:
+    bad = copy.deepcopy(_VALID)
+    bad["sources"][0]["base_url"] = "ftp://x.example.com"
+    assert any("base_url" in e for e in validate_pack(bad))
+
+
+def test_non_bool_auto_apply_safe_is_rejected() -> None:
+    bad = copy.deepcopy(_VALID)
+    bad["sources"][0]["apply_playbook"] = {"auto_apply_safe": "yes"}
+    assert any("auto_apply_safe" in e for e in validate_pack(bad))
+
+
+def test_sources_for_excludes_a_non_matching_sector() -> None:
+    # germantechjobs is tagged sectors:[tech]; a healthcare query must not select
+    # it, but a tech query must.
+    healthcare = {s.slug for s in registry.sources_for(sectors=["healthcare"])}
+    assert "germantechjobs" not in healthcare
+    tech = {s.slug for s in registry.sources_for(sectors=["tech"])}
+    assert "germantechjobs" in tech
+
+
 def test_all_shipped_packs_load_and_validate() -> None:
     sources = registry.load_sources()
     assert len(sources) >= 10  # a meaningful seed

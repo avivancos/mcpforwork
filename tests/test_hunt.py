@@ -133,6 +133,68 @@ def test_submit_findings_unknown_source_errors(uow) -> None:
     assert "error" in hunt.submit_findings(uow, uid, "no-such-source", [])
 
 
+def test_submit_findings_skips_a_url_already_hand_applied(uow) -> None:
+    # The external_applications dedup gate: a URL already applied to must never
+    # re-enter the pipeline as a finding.
+    uid = _user(uow)
+    profiles.create_profile(uow, uid, {"target_titles": ["Data Engineer"]})
+    dedup.record_application(uow, uid, url="https://x.com/1", channel="email")
+    uow.commit()
+
+    result = hunt.submit_findings(
+        uow, uid, "remoteok", [{"url": "https://x.com/1", "title": "Data Engineer"}]
+    )
+    uow.commit()
+    assert result["new"] == 0
+    assert result["seen_again"] == 1
+    assert hunt.list_matches(uow, uid, min_score=0) == []  # no finding row created
+
+
+def test_submit_findings_skips_non_http_url_schemes(uow) -> None:
+    uid = _user(uow)
+    profiles.create_profile(uow, uid, {"target_titles": ["Data Engineer"]})
+    uow.commit()
+    result = hunt.submit_findings(
+        uow,
+        uid,
+        "remoteok",
+        [
+            {"url": "javascript:alert(1)", "title": "Evil"},
+            {"url": "ftp://host/1", "title": "Also skipped"},
+        ],
+    )
+    assert result["skipped"] == 2
+    assert result["new"] == 0
+
+
+def test_list_matches_filters_by_status(uow) -> None:
+    uid = _user(uow)
+    profiles.create_profile(uow, uid, {"target_titles": ["Data Engineer"]})
+    uow.commit()
+    hunt.submit_findings(
+        uow, uid, "remoteok", [{"url": "https://x.com/1", "title": "Data Engineer"}]
+    )
+    uow.commit()
+    uow.execute("UPDATE explore_findings SET status = 'discarded' WHERE user_id = ?", (uid,))
+    uow.commit()
+    assert hunt.list_matches(uow, uid, min_score=0, status="new") == []
+    assert len(hunt.list_matches(uow, uid, min_score=0, status="discarded")) == 1
+
+
+def test_list_matches_respects_the_limit(uow) -> None:
+    uid = _user(uow)
+    profiles.create_profile(uow, uid, {"target_titles": ["Data Engineer"]})
+    uow.commit()
+    hunt.submit_findings(
+        uow,
+        uid,
+        "remoteok",
+        [{"url": f"https://x.com/{i}", "title": "Data Engineer"} for i in range(5)],
+    )
+    uow.commit()
+    assert len(hunt.list_matches(uow, uid, min_score=0, limit=2)) == 2
+
+
 def test_list_matches_orders_by_score_and_respects_min_score(uow) -> None:
     uid = _user(uow)
     profiles.create_profile(uow, uid, {"target_titles": ["Data Engineer"]})

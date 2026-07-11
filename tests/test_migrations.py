@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from mcpforwork.adapters.db import connect
+from mcpforwork.adapters.db import migrations as m
 from mcpforwork.adapters.db.migrations import SCHEMA_VERSION, _run_sqlite_migration
 
 
@@ -30,6 +31,40 @@ def test_migrating_an_already_current_database_is_a_noop(tmp_path: Path) -> None
         assert uow.fetchone("PRAGMA user_version")["user_version"] == SCHEMA_VERSION
     finally:
         uow.close()
+
+
+def test_v4_recreate_preserves_existing_external_application_rows(conn: sqlite3.Connection) -> None:
+    # The v4 migration DROPs + rebuilds external_applications to add the
+    # finding_id FK. A real S1->S2 upgrade has rows in that table; the copy must
+    # preserve them (data-ownership invariant). Build a v3 DB by hand, seed a
+    # row, then apply only the v4 recreate.
+    conn.executescript(m._SCHEMA_PATH.read_text())
+    conn.executescript(m.MIGRATIONS[2])
+    conn.executescript(m.MIGRATIONS[3])
+    conn.commit()
+    conn.execute("INSERT INTO users (id, email) VALUES (1, 'a@b.c')")
+    conn.execute(
+        "INSERT INTO external_applications (user_id, url, channel, dedup_hash, notes)"
+        " VALUES (1, 'https://x/1', 'email', 'h1', 'keep me')"
+    )
+    conn.commit()
+
+    _run_sqlite_migration(conn, m.MIGRATIONS[4], fk_recreate=False)
+    conn.commit()
+
+    row = conn.execute(
+        "SELECT url, channel, notes, finding_id FROM external_applications WHERE dedup_hash = 'h1'"
+    ).fetchone()
+    assert row["url"] == "https://x/1"
+    assert row["channel"] == "email"
+    assert row["notes"] == "keep me"  # every column survived the copy
+    assert row["finding_id"] is None
+    # The finding_id FK is now present.
+    fks = {
+        (f["table"], f["from"])
+        for f in conn.execute("PRAGMA foreign_key_list(external_applications)").fetchall()
+    }
+    assert ("explore_findings", "finding_id") in fks
 
 
 def test_fk_recreate_migration_preserves_child_references(conn: sqlite3.Connection) -> None:

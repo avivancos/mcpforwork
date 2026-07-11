@@ -89,15 +89,13 @@ def sources_for(
     countries: Sequence[str] | None = None,
     sectors: Sequence[str] | None = None,
     remote: bool | None = None,
-    *,
-    enabled_only: bool = True,
 ) -> list[PackSource]:
-    """Select sources whose country/sector tags overlap the request. A "global"
-    country tag or "any" sector tag matches anything. `remote=True` keeps only
-    remote-friendly boards; `None` does not filter on mode."""
+    """Select enabled sources whose country/sector tags overlap the request. A
+    "global" country tag or "any" sector tag matches anything. `remote=True`
+    keeps only remote-friendly boards; `None` does not filter on mode."""
     out: list[PackSource] = []
     for src in load_sources().values():
-        if enabled_only and not src.enabled:
+        if not src.enabled:
             continue
         if remote is True and not src.remote:
             continue

@@ -86,6 +86,19 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "the MCP guidance module is a dependency-free client-facing contract"
+type = "forbidden"
+source_modules = ["mcpforwork.entrypoints.mcp.guidance"]
+forbidden_modules = [
+    "mcpforwork.domain",
+    "mcpforwork.services",
+    "mcpforwork.ports",
+    "mcpforwork.adapters",
+    "mcpforwork.packs",
+    "mcpforwork.config",
+]
+
+[[tool.importlinter.contracts]]
 name = "no LLM SDKs anywhere in the server (zero server-side LLM invariant)"
 type = "forbidden"
 source_modules = ["mcpforwork"]
