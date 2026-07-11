@@ -462,6 +462,18 @@ def save_form_answer(field_label: str, answer: str) -> str:
 
 
 @mcp.tool()
+def abandon_application(application_id: int, reason: str = "") -> str:
+    """Close an application you decided not to pursue (any open state). A later
+    start_application for the same match opens a fresh session."""
+    with _tenant_uow() as (uow, user_id):
+        result = apply_service.abandon_application(uow, user_id, application_id, reason)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    return _ok("abandon_application", result)
+
+
+@mcp.tool()
 def request_submit(application_id: int, summary: str = "") -> str:
     """THE consent gate. Ask permission to move to submission: at consent level
     0 the answer is always await_human — show the filled form; the HUMAN clicks

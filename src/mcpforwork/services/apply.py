@@ -216,6 +216,28 @@ def report_apply_progress(
     }
 
 
+def abandon_application(
+    uow: UnitOfWork, user_id: int, application_id: int, reason: str = ""
+) -> dict[str, Any]:
+    """Close an open session the human decided not to pursue (any open state ->
+    abandoned). Submitted/verified are terminal — the machine rejects those. A
+    later start_application for the same finding then opens a fresh session,
+    because `abandoned` is not an open state."""
+    app = _load_application(uow, user_id, application_id)
+    if app is None:
+        return {"error": f"application {application_id} not found"}
+    if not can_transition(app["state"], "abandoned"):
+        return {"error": f"application is '{app['state']}' — cannot abandon"}
+    uow.execute(
+        "UPDATE applications SET state = 'abandoned', updated_at = ? WHERE id = ? AND user_id = ?",
+        (utcnow_iso(), application_id, user_id),
+    )
+    audit.record(
+        uow, user_id, "abandon_application", {"application_id": application_id, "reason": reason}
+    )
+    return {"ok": True, "state": "abandoned", "application_id": application_id}
+
+
 def resolve_field(
     uow: UnitOfWork,
     user_id: int,
