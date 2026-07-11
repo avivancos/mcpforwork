@@ -41,7 +41,11 @@ _NEXT_ACTIONS: dict[str, str] = {
     "submit_findings": "Call list_matches to review what scored well.",
     "check_seen": "Only browse/apply URLs marked 'new'; skip the rest.",
     "list_matches": "Inspect one with get_match (assets + apply arrive next sprint).",
-    "get_match": "Assets and supervised apply arrive in a later sprint.",
+    "get_match": "Call get_generation_brief(finding_id, asset_type) to draft materials.",
+    "get_generation_brief": (
+        "Draft the asset honoring honesty_rules (only facts_inventory claims), then "
+        "submit_asset and run ats_coverage_check."
+    ),
 }
 
 

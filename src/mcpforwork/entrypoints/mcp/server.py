@@ -20,7 +20,7 @@ from mcpforwork.adapters.db import SqlUnitOfWork, connect
 from mcpforwork.domain.profile import ProfileValidationError
 from mcpforwork.entrypoints.mcp import guidance
 from mcpforwork.entrypoints.mcp.guidance import SERVER_INSTRUCTIONS
-from mcpforwork.services import audit, dedup, hunt, profiles
+from mcpforwork.services import audit, briefs, dedup, hunt, profiles
 
 mcp = FastMCP("mcpforwork", instructions=SERVER_INSTRUCTIONS)
 
@@ -322,6 +322,24 @@ def get_match(finding_id: int) -> str:
     if match is None:
         return _fail(f"match {finding_id} not found")
     return _ok("get_match", {"match": match})
+
+
+# --------------------------------------------------------------------------- #
+# Asset tools
+# --------------------------------------------------------------------------- #
+@mcp.tool()
+def get_generation_brief(finding_id: int, asset_type: str) -> str:
+    """The structured brief (job keywords + facts inventory + style + honesty
+    rules) YOU draft the cv/cover_letter from. Only claim what the
+    facts_inventory proves."""
+    uow, user_id = _uow()
+    try:
+        brief = briefs.get_generation_brief(uow, user_id, finding_id, asset_type)
+    finally:
+        uow.close()
+    if "error" in brief:
+        return _fail(brief["error"])
+    return _ok("get_generation_brief", brief)
 
 
 @mcp.prompt(name="hunt")
