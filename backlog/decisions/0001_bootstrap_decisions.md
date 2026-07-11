@@ -66,7 +66,26 @@ decisions had to be fixed before any code existed.
   session-scoped GUC, correct for the fresh-per-request-connection model. If
   connection pooling is introduced, enforce reset-on-checkout and add a test
   proving a recycled connection fails closed.
-- **[note, no action]** timestamp columns are TIMESTAMP on PG / TEXT on SQLite
-  (no consumer reads them back yet); `_pg_statements` does not track
-  single-quoted literals (no current migration triggers it). Revisit if a
-  consumer/literal appears.
+- **[note, no action]** `_pg_statements` does not track single-quoted literals
+  (no current migration triggers it). Revisit if a literal with `;`/`$`/`--`
+  appears.
+
+## Carried follow-ups (from the S2 final-review gate)
+
+- **[S4 — apply/prefill card]** `apply_playbook` URLs (returned by
+  `source_playbook`) are NOT scheme-validated the way `url_template`/`base_url`
+  now are. No live path today (only the text `ats_hint` is read; nothing opens
+  an apply URL yet). When the client opens an apply URL, scheme-validate it in
+  `domain/packs.validate_pack` the same way.
+- **[note, low priority]** Timestamp string shape differs across backends:
+  SQLite emits `…Z` (ms, UTC), Postgres emits `…` (µs, no offset, naïve
+  TIMESTAMP). Both are valid ISO-8601 and both satisfy consumers today. If a
+  strict client needs a uniform shape, normalise timestamps to `…Z` at the
+  service deserializers (or store `timestamptz` on PG).
+- **[note, low priority]** `_json_default` (MCP entrypoint) falls back to
+  `str(obj)` for any non-datetime type — defensive against crashes but would
+  silently stringify a future genuinely-wrong type (e.g. a `Decimal` money
+  column, none exists until billing S7). Revisit when a NUMERIC column lands.
+- **[still deferred — rule of two]** The entrypoint-independence import contract
+  ("entrypoints never import each other") lands when the second entrypoint
+  (API/CLI) exists. The guidance-purity contract was added in S2.
