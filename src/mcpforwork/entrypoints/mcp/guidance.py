@@ -54,6 +54,7 @@ _NEXT_ACTIONS: dict[str, str] = {
     "confirm_submitted": "Recorded. Optionally record_outcome later; back to /review.",
     "record_outcome": "Noted for calibration. Back to /review or /hunt.",
     "get_asset_file": "Upload this file where the form asks for it.",
+    "report_playbook_result": "Thanks — this feeds the next pack version. Back to /review.",
     "list_matches": "Run /review with the human: approve_match or discard_match each.",
     "approve_match": "Run /apply: get_generation_brief to draft materials.",
     "discard_match": "Back to list_matches for the next one.",

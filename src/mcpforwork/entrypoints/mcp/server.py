@@ -10,6 +10,8 @@ import importlib.metadata
 import json
 import os
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date, datetime
 from typing import Any
 
@@ -21,7 +23,17 @@ from mcpforwork.domain.profile import ProfileValidationError
 from mcpforwork.entrypoints.mcp import guidance
 from mcpforwork.entrypoints.mcp.guidance import SERVER_INSTRUCTIONS
 from mcpforwork.services import apply as apply_service
-from mcpforwork.services import assets, audit, briefs, coverage, dedup, hunt, profiles, review
+from mcpforwork.services import (
+    assets,
+    audit,
+    briefs,
+    coverage,
+    dedup,
+    hunt,
+    playbooks,
+    profiles,
+    review,
+)
 
 mcp = FastMCP("mcpforwork", instructions=SERVER_INSTRUCTIONS)
 
@@ -51,6 +63,29 @@ def _uow() -> tuple[SqlUnitOfWork, int]:
         uow.close()  # never leak the connection if setup fails
         raise
     return uow, user_id
+
+
+@contextmanager
+def _tenant_uow() -> Iterator[tuple[SqlUnitOfWork, int]]:
+    """The per-tool seam: a tenant-scoped UnitOfWork that always closes.
+    Simplifier refactor (S4.4) over the repeated try/finally boilerplate."""
+    uow, user_id = _uow()
+    try:
+        yield uow, user_id
+    finally:
+        uow.close()
+
+
+@mcp.tool()
+def report_playbook_result(source_slug: str, kind: str, diff: dict | None = None) -> str:
+    """Opt-in crowd-learning: report what worked/moved/broke on a source
+    (kind: success | drift | break) to improve the next pack version."""
+    with _tenant_uow() as (uow, user_id):
+        result = playbooks.report_playbook_result(uow, user_id, source_slug, kind, diff or {})
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    return _ok("report_playbook_result", result)
 
 
 def _tool_names() -> list[str]:
@@ -119,11 +154,8 @@ def create_profile(patch: dict | None = None, label: str = "default") -> str:
 @mcp.tool()
 def get_profile(profile_id: int | None = None) -> str:
     """Return the active profile (or a given one), JSON fields parsed."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         prof = profiles.get_profile(uow, user_id, profile_id)
-    finally:
-        uow.close()
     if prof is None:
         return _fail("no profile yet — call update_profile to create one")
     return _ok("get_profile", {"profile": prof})
@@ -157,25 +189,19 @@ def update_profile(patch: dict, profile_id: int | None = None) -> str:
 @mcp.tool()
 def list_profiles() -> str:
     """List the user's profiles (the active one has is_active=1)."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         rows = profiles.list_profiles(uow, user_id)
-    finally:
-        uow.close()
     return _ok("list_profiles", {"profiles": rows})
 
 
 @mcp.tool()
 def set_active_profile(profile_id: int) -> str:
     """Switch the active profile."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         if profiles.get_profile(uow, user_id, profile_id) is None:
             return _fail(f"profile {profile_id} not found")
         profiles.set_active_profile(uow, user_id, profile_id)
         uow.commit()
-    finally:
-        uow.close()
     return _ok("set_active_profile", {"ok": True, "active_profile_id": profile_id})
 
 
@@ -247,11 +273,8 @@ def import_from_url_findings(url: str, fields: dict) -> str:
 def hunt_plan() -> str:
     """Per-source search playbooks for the active profile — the URLs YOU open in
     the user's browser to find postings."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         plan = hunt.hunt_plan(uow, user_id)
-    finally:
-        uow.close()
     if "error" in plan:
         return _fail(plan["error"])
     return _ok("hunt_plan", plan)
@@ -278,14 +301,11 @@ def list_sources(countries: list[str] | None = None, sectors: list[str] | None =
 def submit_findings(source_slug: str, findings: list[dict]) -> str:
     """Ingest postings YOU extracted from a source: deduped, scored against the
     profile, and persisted. Each finding needs at least url + title."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = hunt.submit_findings(uow, user_id, source_slug, findings)
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("submit_findings", result)
 
 
@@ -293,33 +313,24 @@ def submit_findings(source_slug: str, findings: list[dict]) -> str:
 def check_seen(urls: list[str]) -> str:
     """Report which URLs the copilot already knows (scouted or applied). Only
     browse/apply the ones marked 'new'."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = dedup.check_seen(uow, user_id, urls)
-    finally:
-        uow.close()
     return _ok("check_seen", result)
 
 
 @mcp.tool()
 def list_matches(min_score: int = 0, status: str | None = None, limit: int = 50) -> str:
     """The scouted matches, best score first."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         matches = hunt.list_matches(uow, user_id, min_score=min_score, status=status, limit=limit)
-    finally:
-        uow.close()
     return _ok("list_matches", {"count": len(matches), "matches": matches})
 
 
 @mcp.tool()
 def get_match(finding_id: int) -> str:
     """Inspect one scouted match by id."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         match = hunt.get_match(uow, user_id, finding_id)
-    finally:
-        uow.close()
     if match is None:
         return _fail(f"match {finding_id} not found")
     return _ok("get_match", {"match": match})
@@ -333,11 +344,8 @@ def get_generation_brief(finding_id: int, asset_type: str) -> str:
     """The structured brief (job keywords + facts inventory + style + honesty
     rules) YOU draft the cv/cover_letter from. Only claim what the
     facts_inventory proves."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         brief = briefs.get_generation_brief(uow, user_id, finding_id, asset_type)
-    finally:
-        uow.close()
     if "error" in brief:
         return _fail(brief["error"])
     return _ok("get_generation_brief", brief)
@@ -346,25 +354,19 @@ def get_generation_brief(finding_id: int, asset_type: str) -> str:
 @mcp.tool()
 def submit_asset(finding_id: int, asset_type: str, content: str) -> str:
     """Store YOUR draft (markdown) for a match; versions auto-increment."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = assets.submit_asset(uow, user_id, finding_id, asset_type, content)
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("submit_asset", result)
 
 
 @mcp.tool()
 def get_assets(finding_id: int, asset_type: str | None = None) -> str:
     """The stored drafts for a match, newest version first."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         rows = assets.get_assets(uow, user_id, finding_id, asset_type)
-    finally:
-        uow.close()
     return _ok("get_assets", {"count": len(rows), "assets": rows})
 
 
@@ -373,11 +375,8 @@ def ats_coverage_check(finding_id: int, asset_id: int) -> str:
     """Deterministic check of the posting's keywords vs a stored draft:
     covered / missing_but_have (truthfully addable) / genuine_gaps (acknowledge,
     never stuff)."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = coverage.ats_coverage_check(uow, user_id, finding_id, asset_id)
-    finally:
-        uow.close()
     if "error" in result:
         return _fail(result["error"])
     return _ok("ats_coverage_check", result)
@@ -386,28 +385,22 @@ def ats_coverage_check(finding_id: int, asset_id: int) -> str:
 @mcp.tool()
 def approve_match(finding_id: int) -> str:
     """Approve a match (human decision) so materials/apply can proceed."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = review.approve_match(uow, user_id, finding_id)
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("approve_match", result)
 
 
 @mcp.tool()
 def discard_match(finding_id: int, reason: str = "") -> str:
     """Discard a match (human decision); it will never be re-surfaced."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = review.discard_match(uow, user_id, finding_id, reason)
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("discard_match", result)
 
 
@@ -417,14 +410,11 @@ def start_application(finding_id: int) -> str:
     preflight (dedup gate, daily cap) and returns the step plan YOU execute in
     the user's browser. The plan never contains a submit step — request_submit
     is the only submission route and the human decides."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         session = apply_service.start_application(uow, user_id, finding_id)
         if "error" in session:
             return _fail(session["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("start_application", session)
 
 
@@ -434,16 +424,13 @@ def report_apply_progress(
 ) -> str:
     """Report a step's outcome (ok | blocked | mismatch). The server answers
     with the next step, a repair, or a human-pause — never a submit."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = apply_service.report_apply_progress(
             uow, user_id, application_id, step_id, status, observed, obstacle
         )
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("report_apply_progress", result)
 
 
@@ -453,13 +440,10 @@ def resolve_field(
 ) -> str:
     """Deterministic answer for an unpredicted form question — from the profile
     or saved answers; otherwise ask_user (never invent)."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = apply_service.resolve_field(
             uow, user_id, application_id, field_label, field_type, options
         )
-    finally:
-        uow.close()
     if "error" in result:
         return _fail(result["error"])
     return _ok("resolve_field", result)
@@ -468,14 +452,11 @@ def resolve_field(
 @mcp.tool()
 def save_form_answer(field_label: str, answer: str) -> str:
     """Persist a HUMAN-confirmed screener answer so it is never asked twice."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = apply_service.save_form_answer(uow, user_id, field_label, answer)
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("save_form_answer", result)
 
 
@@ -484,14 +465,11 @@ def request_submit(application_id: int, summary: str = "") -> str:
     """THE consent gate. Ask permission to move to submission: at consent level
     0 the answer is always await_human — show the filled form; the HUMAN clicks
     Submit."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = apply_service.request_submit(uow, user_id, application_id, summary)
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("request_submit", result)
 
 
@@ -499,14 +477,11 @@ def request_submit(application_id: int, summary: str = "") -> str:
 def confirm_submitted(application_id: int, evidence: str = "") -> str:
     """AFTER the human confirms they clicked Submit: close the loop (state,
     dedup record, audit)."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = apply_service.confirm_submitted(uow, user_id, application_id, evidence)
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("confirm_submitted", result)
 
 
@@ -514,25 +489,19 @@ def confirm_submitted(application_id: int, evidence: str = "") -> str:
 def record_outcome(application_id: int, outcome: str, notes: str = "") -> str:
     """Record what happened (no_reply|rejected|interview|offer|hired) — feeds
     calibration."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = apply_service.record_outcome(uow, user_id, application_id, outcome, notes)
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("record_outcome", result)
 
 
 @mcp.tool()
 def get_asset_file(asset_id: int) -> str:
     """A local file path for the asset (for form uploads)."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = apply_service.get_asset_file(uow, user_id, asset_id)
-    finally:
-        uow.close()
     if "error" in result:
         return _fail(result["error"])
     return _ok("get_asset_file", result)
@@ -542,16 +511,13 @@ def get_asset_file(asset_id: int) -> str:
 def record_application(url: str, channel: str = "", method: str = "", notes: str = "") -> str:
     """Record that the HUMAN submitted an application (any channel) so the
     copilot never re-surfaces the posting. Idempotent per URL."""
-    uow, user_id = _uow()
-    try:
+    with _tenant_uow() as (uow, user_id):
         result = dedup.record_application(
             uow, user_id, url=url, channel=channel, method=method, notes=notes
         )
         if "error" in result:
             return _fail(result["error"])
         uow.commit()
-    finally:
-        uow.close()
     return _ok("record_application", result)
 
 
