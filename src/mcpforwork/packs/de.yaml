@@ -1,0 +1,42 @@
+pack:
+  id: de
+  version: 1
+  kind: country
+  title: Germany job boards
+
+sources:
+  - slug: indeed-de
+    name: Indeed (Germany)
+    base_url: https://de.indeed.com
+    countries: [DE]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://de.indeed.com/jobs?q={query}"
+      result_hint: "Add &l=<Stadt> for location; results paginate at the bottom."
+
+  - slug: stepstone-de
+    name: StepStone (Germany)
+    base_url: https://www.stepstone.de
+    countries: [DE]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.stepstone.de/jobs/{query}"
+      result_hint: "Hyphenate multi-word queries; filters are in the left rail."
+
+  - slug: germantechjobs
+    name: GermanTech Jobs
+    base_url: https://germantechjobs.de
+    countries: [DE]
+    sectors: [tech]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://germantechjobs.de/?search={query}"
+      result_hint: "English-friendly tech roles in Germany; toggle Remote in filters."

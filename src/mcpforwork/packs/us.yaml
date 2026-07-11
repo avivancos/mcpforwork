@@ -1,0 +1,42 @@
+pack:
+  id: us
+  version: 1
+  kind: country
+  title: United States job boards
+
+sources:
+  - slug: indeed-us
+    name: Indeed (US)
+    base_url: https://www.indeed.com
+    countries: [US]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.indeed.com/jobs?q={query}"
+      result_hint: "Add &l=<city> for location; results paginate at the bottom."
+
+  - slug: linkedin-us
+    name: LinkedIn Jobs (US)
+    base_url: https://www.linkedin.com
+    countries: [US]
+    sectors: [any]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.linkedin.com/jobs/search/?keywords={query}&location=United%20States"
+      result_hint: "May require login; the human signs in in their own browser."
+
+  - slug: builtin-us
+    name: Built In (US tech)
+    base_url: https://builtin.com
+    countries: [US]
+    sectors: [tech, startups]
+    remote: false
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://builtin.com/jobs?search={query}"
+      result_hint: "US tech/startup roles; filter by city hub or Remote."

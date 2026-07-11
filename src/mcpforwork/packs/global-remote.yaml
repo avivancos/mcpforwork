@@ -1,0 +1,91 @@
+pack:
+  id: global-remote
+  version: 1
+  kind: global
+  title: Global remote-first job boards
+
+# Sector-agnostic remote boards. countries=[global] matches any candidate
+# country; sectors=[any] matches any target sector. The client fills {query}
+# with the profile's target titles.
+sources:
+  - slug: remoteok
+    name: RemoteOK
+    base_url: https://remoteok.com
+    countries: [global]
+    sectors: [any]
+    remote: true
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://remoteok.com/remote-{query}-jobs"
+      result_hint: "Listings are the main feed; scroll to load more (no pagination)."
+
+  - slug: remotive
+    name: Remotive
+    base_url: https://remotive.com
+    countries: [global]
+    sectors: [any]
+    remote: true
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://remotive.com/remote-jobs?search={query}"
+      result_hint: "Results under the search box; filter chips narrow by category."
+
+  - slug: weworkremotely
+    name: We Work Remotely
+    base_url: https://weworkremotely.com
+    countries: [global]
+    sectors: [any]
+    remote: true
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://weworkremotely.com/remote-jobs/search?term={query}"
+      result_hint: "Results grouped by category; each card links to the posting."
+
+  - slug: himalayas
+    name: Himalayas
+    base_url: https://himalayas.app
+    countries: [global]
+    sectors: [any]
+    remote: true
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://himalayas.app/jobs?search={query}"
+      result_hint: "Infinite scroll; use the country filter for work-authorization."
+
+  - slug: jobicy
+    name: Jobicy
+    base_url: https://jobicy.com
+    countries: [global]
+    sectors: [any]
+    remote: true
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://jobicy.com/?s={query}"
+
+  - slug: workingnomads
+    name: Working Nomads
+    base_url: https://www.workingnomads.com
+    countries: [global]
+    sectors: [any]
+    remote: true
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://www.workingnomads.com/jobs?search={query}"
+
+  - slug: hnhiring
+    name: HN Who is Hiring (search)
+    base_url: https://hnhiring.com
+    countries: [global]
+    sectors: [any]
+    remote: true
+    tier: free
+    enabled: true
+    search_playbook:
+      url_template: "https://hnhiring.com/?q={query}"
+      result_hint: "Aggregates the monthly HN 'Who is hiring' thread; one comment per role."
