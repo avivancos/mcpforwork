@@ -1,0 +1,18 @@
+# Python image build context (repo root). Keep it to pyproject/uv.lock/README/src.
+web
+.venv
+.git
+.gitignore
+.github
+backlog
+docs
+tests
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+*.tsbuildinfo
+Dockerfile
+.dockerignore
+docker-compose.yml
