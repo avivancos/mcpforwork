@@ -26,6 +26,7 @@ dev = [
 ]
 
 [project.scripts]
+mcpforwork = "mcpforwork.entrypoints.cli.main:main"
 mcpforwork-mcp = "mcpforwork.entrypoints.mcp.server:main"
 
 [build-system]
@@ -84,6 +85,15 @@ forbidden_modules = [
     "mcpforwork.adapters",
     "mcpforwork.entrypoints",
 ]
+
+[[tool.importlinter.contracts]]
+# cli -> mcp.server is the ONE sanctioned edge (serve is a launcher); the MCP
+# server must never grow a dependency on the CLI (carried ADR item, second
+# entrypoint now exists).
+name = "the MCP server never imports the CLI entrypoint"
+type = "forbidden"
+source_modules = ["mcpforwork.entrypoints.mcp"]
+forbidden_modules = ["mcpforwork.entrypoints.cli"]
 
 [[tool.importlinter.contracts]]
 name = "the MCP guidance module is a dependency-free client-facing contract"

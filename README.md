@@ -2,7 +2,26 @@
 
 Open-source, MCP-first job-search copilot — any sector, any country. Self-hostable for free; hosted at a flat $5/mo.
 
-**Status: pre-alpha (Sprint 0 — foundations).** Nothing to install yet.
+**Status: pre-alpha.** Self-host works end-to-end (profile → hunt → briefs →
+supervised apply); hosted is not launched yet.
+
+## Quickstart (self-host, zero account)
+
+```bash
+uvx --from mcpforwork mcpforwork init     # creates ~/.mcpforwork/mcpforwork.db
+```
+
+Add the connector to Claude Code / Desktop (`.mcp.json`):
+
+```json
+{ "mcpServers": { "mcpforwork": { "command": "uvx",
+    "args": ["--from", "mcpforwork", "mcpforwork-mcp"] } } }
+```
+
+Then, in your client: `/setup` (build your profile, < 3 min) → `/hunt`
+(browser-verified job-portal searches; UK, Spain, US, DE + remote boards) →
+`/review` → `/apply` (honest drafts + coverage check; **you** click Submit —
+the copilot never auto-submits). Zero server-side LLM calls, ever.
 
 ## What makes it different
 
