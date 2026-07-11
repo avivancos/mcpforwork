@@ -1,0 +1,408 @@
+/* ============================================================
+   mcpfor.work — design tokens & shared primitives
+   Source of truth: design handoff README §Design Tokens + canvas comps.
+   Light is the default; dark applies ONLY inside [data-allow-dark] scopes
+   (the dashboard — comps 4i/4j). Landing & docs were designed light-only.
+   ============================================================ */
+
+/* The next/font variables (--font-geist, --font-geist-mono) are injected on
+   <body>, so the composite font tokens must be declared there too — declaring
+   them on :root would resolve var(--font-geist) before it exists. */
+body {
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+}
+
+:root {
+  /* -- surfaces -- */
+  --canvas: #edebe6;        /* marketing canvas */
+  --bg: #fafaf9;            /* app surface */
+  --bg-quiet: #efede9;      /* quiet section (connect/onboarding) */
+  --bg-side: #f5f4f1;       /* sidebar / quiet band */
+  --card: #ffffff;
+  --card-raised: #ffffff;
+  --row-alt: #fcfcfb;
+
+  /* -- borders -- */
+  --border: #e7e5e4;
+  --border-hair: #f0efed;
+  --border-hair2: #edebe8;
+  --border-input: #d6d3d1;
+
+  /* -- ink -- */
+  --ink: #1c1917;
+  --ink-2: #57534e;
+  --ink-3: #78716c;
+  --ink-4: #a8a29e;
+  --ink-label: #44403c;
+
+  /* -- accent (indigo) -- */
+  --accent: #4f46e5;
+  --accent-strong: #4f46e5;   /* primary button bg (dark: #6366f1) */
+  --accent-text: #4338ca;     /* text on tint */
+  --accent-tint: #eef2ff;
+  --accent-tint-border: #c7d2fe;
+  --accent-tint-soft: #f5f7ff;
+
+  /* -- semantic: success / warning / danger -- */
+  --ok: #15803d;
+  --ok-bg: #f0fdf4;
+  --ok-border: #bbf7d0;
+  --ok-dot: #15803d;
+  --warn: #b45309;
+  --warn-strong: #92400e;
+  --warn-bg: #fffbeb;
+  --warn-border: #fde68a;
+  --warn-muted: #b45309;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+  --info-text: #1d4ed8;
+  --info-bg: #eff6ff;
+  --info-border: #bfdbfe;
+
+  /* -- marketing links (green) -- */
+  --link-green: #216b4b;
+  --link-green-hover: #175037;
+
+  /* -- terminal blocks (same in both themes) -- */
+  --term-bg: #1c1917;
+  --term-border: #2e2a26;
+  --term-text: #e7e5e4;
+  --term-accent: #a5b4fc;
+  --term-string: #86efac;
+  --term-muted: #78716c;
+  --term-chip-border: #44403c;
+
+  /* -- misc -- */
+  --stone-chip-bg: #f5f5f4;
+  --progress-track: #dedbd5;
+  --claude-dot: #d97757;
+  --chatgpt-dot: #1c1917;
+  --btn-dark-bg: #1c1917;
+  --btn-dark-text: #fafaf9;
+  --shadow-card: 0 14px 34px -26px rgba(28, 25, 23, 0.25);
+  --shadow-pop: 0 18px 44px -24px rgba(28, 25, 23, 0.28);
+  --shadow-accent: 0 10px 26px -18px rgba(79, 70, 229, 0.35);
+  --focus-ring: #eef2ff;
+}
+
+/* Dark mappings (comps 4i/4j) — dashboard scopes only. */
+@media (prefers-color-scheme: dark) {
+  [data-allow-dark] {
+    --bg: #141210;
+    --bg-quiet: #141210;
+    --bg-side: #191613;
+    --card: #1c1917;
+    --card-raised: #232019;
+    --row-alt: #191613;
+
+    --border: #2e2a26;
+    --border-hair: #262220;
+    --border-hair2: #262220;
+    --border-input: #44403c;
+
+    --ink: #fafaf9;
+    --ink-2: #a8a29e;
+    --ink-3: #78716c;
+    --ink-4: #78716c;
+    --ink-label: #a8a29e;
+
+    --accent: #a5b4fc;
+    --accent-strong: #6366f1;
+    --accent-text: #c7d2fe;
+    --accent-tint: #26223b;
+    --accent-tint-border: #3b3670;
+    --accent-tint-soft: #26223b;
+
+    --ok: #6ee7a0;
+    --ok-bg: #14261b;
+    --ok-border: #1f4a2e;
+    --ok-dot: #4ade80;
+    --warn: #fcd34d;
+    --warn-strong: #fcd34d;
+    --warn-bg: #2a2211;
+    --warn-border: #4a3a15;
+    --warn-muted: #d6a542;
+    --danger: #f87171;
+    --danger-bg: #2a1414;
+    --danger-border: #5c2626;
+    --info-text: #93c5fd;
+    --info-bg: #16202e;
+    --info-border: #274666;
+
+    --stone-chip-bg: #232019;
+    --progress-track: #2e2a26;
+    --chatgpt-dot: #fafaf9;
+    --btn-dark-bg: #232019;
+    --btn-dark-text: #e7e5e4;
+    --shadow-card: none;
+    --shadow-pop: none;
+    --shadow-accent: none;
+    --focus-ring: #26223b;
+  }
+}
+
+/* ---------- base ---------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- shared primitives ---------- */
+
+/* Logo: Geist Mono, `mcp` accent + `for.work` ink */
+.logo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.logo b {
+  font-weight: 500;
+  color: var(--accent);
+}
+
+/* Mono uppercase eyebrow label */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.eyebrow--accent {
+  color: var(--accent);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 13.5px;
+  padding: 8px 16px;
+  white-space: nowrap;
+}
+.btn--primary {
+  background: var(--accent-strong);
+  color: #ffffff;
+  font-weight: 600;
+}
+.btn--primary:hover {
+  filter: brightness(1.06);
+}
+.btn--secondary {
+  border: 1px solid var(--border-input);
+  background: var(--card);
+  color: var(--ink);
+}
+.btn--secondary:hover {
+  border-color: var(--ink-4);
+}
+.btn--approve {
+  border: 1px solid var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-radius: 7px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.btn--ghost {
+  border: 1px solid var(--border);
+  color: var(--ink-3);
+  border-radius: 7px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+}
+
+/* Status chips — Geist Mono 10–10.5px, pill, 1px border, tinted bg */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  border-radius: 99px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  background: var(--stone-chip-bg);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.chip--indigo {
+  background: var(--accent-tint);
+  border-color: var(--accent-tint-border);
+  color: var(--accent-text);
+}
+.chip--amber {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+.chip--green {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: var(--ok);
+}
+.chip--red {
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+.chip--blue {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+  color: var(--info-text);
+}
+.chip--faded {
+  color: var(--ink-4);
+}
+
+/* Cards */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+/* Dot (status indicator) */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+.dot--ok {
+  background: var(--ok-dot);
+}
+.dot--hollow {
+  background: transparent;
+  border: 1.5px solid var(--ink-4);
+}
+
+/* Terminal / code block */
+.term {
+  background: var(--term-bg);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.term__bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--term-border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--term-muted);
+}
+.term__copy {
+  border: 1px solid var(--term-chip-border);
+  border-radius: 5px;
+  padding: 2px 8px;
+  color: #a8a29e;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.term__body {
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--term-text);
+}
+.term .p {
+  color: var(--term-muted);
+}
+.term .a {
+  color: var(--term-accent);
+}
+.term .s {
+  color: var(--term-string);
+}
+
+/* Inline code chip */
+.code-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--border-hair2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--ink-2);
+}
+
