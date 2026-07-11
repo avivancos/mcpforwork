@@ -120,7 +120,7 @@ def test_check_seen_flags_a_scouted_finding_as_seen(uow: SqlUnitOfWork) -> None:
     uow.insert(
         "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title, status)"
         " VALUES (?, ?, ?, ?, ?, 'new')",
-        (user_id, "remoteok", dedup_hash(url), url, "Data Engineer"),
+        (user_id, "weworkremotely", dedup_hash(url), url, "Data Engineer"),
     )
     uow.commit()
     item = dedup.check_seen(uow, user_id, [url])["items"][0]
@@ -135,7 +135,7 @@ def test_record_application_links_and_flips_a_matching_finding(uow: SqlUnitOfWor
     fid = uow.insert(
         "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title, status)"
         " VALUES (?, ?, ?, ?, ?, 'new')",
-        (user_id, "remoteok", dedup_hash(url), url, "Data Engineer"),
+        (user_id, "weworkremotely", dedup_hash(url), url, "Data Engineer"),
     )
     uow.commit()
 

@@ -39,10 +39,10 @@ def test_submit_findings_dedups_scores_and_persists(uow) -> None:
     first = hunt.submit_findings(
         uow,
         uid,
-        "remoteok",
+        "weworkremotely",
         [
             {
-                "url": "https://remoteok.com/remote-jobs/123",
+                "url": "https://weworkremotely.com/remote-jobs/123",
                 "title": "Senior Data Engineer",
                 "description": "Build data pipelines",
             },
@@ -57,10 +57,10 @@ def test_submit_findings_dedups_scores_and_persists(uow) -> None:
     second = hunt.submit_findings(
         uow,
         uid,
-        "remoteok",
+        "weworkremotely",
         [
             {
-                "url": "https://remoteok.com/remote-jobs/123?utm_source=x",
+                "url": "https://weworkremotely.com/remote-jobs/123?utm_source=x",
                 "title": "Senior Data Engineer",
             }
         ],
@@ -86,7 +86,7 @@ def test_resighting_a_posting_with_less_data_does_not_downgrade_it(uow) -> None:
     hunt.submit_findings(
         uow,
         uid,
-        "remoteok",
+        "weworkremotely",
         [
             {
                 "url": url,
@@ -99,7 +99,7 @@ def test_resighting_a_posting_with_less_data_does_not_downgrade_it(uow) -> None:
     uow.commit()
     rich_score = hunt.list_matches(uow, uid, min_score=0)[0]["score"]
 
-    hunt.submit_findings(uow, uid, "remoteok", [{"url": url, "title": "Registered Nurse"}])
+    hunt.submit_findings(uow, uid, "weworkremotely", [{"url": url, "title": "Registered Nurse"}])
     uow.commit()
     match = hunt.list_matches(uow, uid, min_score=0)[0]
     assert match["score"] == rich_score  # not downgraded
@@ -113,14 +113,14 @@ def test_resighting_a_posting_with_more_data_enriches_it(uow) -> None:
     )
     uow.commit()
     url = "https://x.com/1"
-    hunt.submit_findings(uow, uid, "remoteok", [{"url": url, "title": "Data Engineer"}])
+    hunt.submit_findings(uow, uid, "weworkremotely", [{"url": url, "title": "Data Engineer"}])
     uow.commit()
     lean_score = hunt.list_matches(uow, uid, min_score=0)[0]["score"]
 
     hunt.submit_findings(
         uow,
         uid,
-        "remoteok",
+        "weworkremotely",
         [{"url": url, "title": "Data Engineer", "remote_scope": "remote", "salary_text": "$120k"}],
     )
     uow.commit()
@@ -142,7 +142,7 @@ def test_submit_findings_skips_a_url_already_hand_applied(uow) -> None:
     uow.commit()
 
     result = hunt.submit_findings(
-        uow, uid, "remoteok", [{"url": "https://x.com/1", "title": "Data Engineer"}]
+        uow, uid, "weworkremotely", [{"url": "https://x.com/1", "title": "Data Engineer"}]
     )
     uow.commit()
     assert result["new"] == 0
@@ -157,7 +157,7 @@ def test_submit_findings_skips_non_http_url_schemes(uow) -> None:
     result = hunt.submit_findings(
         uow,
         uid,
-        "remoteok",
+        "weworkremotely",
         [
             {"url": "javascript:alert(1)", "title": "Evil"},
             {"url": "ftp://host/1", "title": "Also skipped"},
@@ -172,7 +172,7 @@ def test_list_matches_filters_by_status(uow) -> None:
     profiles.create_profile(uow, uid, {"target_titles": ["Data Engineer"]})
     uow.commit()
     hunt.submit_findings(
-        uow, uid, "remoteok", [{"url": "https://x.com/1", "title": "Data Engineer"}]
+        uow, uid, "weworkremotely", [{"url": "https://x.com/1", "title": "Data Engineer"}]
     )
     uow.commit()
     uow.execute("UPDATE explore_findings SET status = 'discarded' WHERE user_id = ?", (uid,))
@@ -188,7 +188,7 @@ def test_list_matches_respects_the_limit(uow) -> None:
     hunt.submit_findings(
         uow,
         uid,
-        "remoteok",
+        "weworkremotely",
         [{"url": f"https://x.com/{i}", "title": "Data Engineer"} for i in range(5)],
     )
     uow.commit()
@@ -202,7 +202,7 @@ def test_list_matches_orders_by_score_and_respects_min_score(uow) -> None:
     hunt.submit_findings(
         uow,
         uid,
-        "remoteok",
+        "weworkremotely",
         [
             {"url": "https://x.com/1", "title": "Data Engineer", "description": "data pipelines"},
             {"url": "https://x.com/2", "title": "Chef", "description": "cooking in a kitchen"},
@@ -221,7 +221,7 @@ def test_a_scouted_finding_is_then_seen_by_check_seen(uow) -> None:
     profiles.create_profile(uow, uid, {"target_titles": ["Data Engineer"]})
     uow.commit()
     hunt.submit_findings(
-        uow, uid, "remoteok", [{"url": "https://x.com/1", "title": "Data Engineer"}]
+        uow, uid, "weworkremotely", [{"url": "https://x.com/1", "title": "Data Engineer"}]
     )
     uow.commit()
     seen = dedup.check_seen(uow, uid, ["https://x.com/1"])
@@ -235,7 +235,7 @@ def test_a_finding_scouted_by_one_user_is_invisible_to_another(uow) -> None:
     profiles.create_profile(uow, alice, {"target_titles": ["Data Engineer"]})
     uow.commit()
     hunt.submit_findings(
-        uow, alice, "remoteok", [{"url": "https://x.com/1", "title": "Data Engineer"}]
+        uow, alice, "weworkremotely", [{"url": "https://x.com/1", "title": "Data Engineer"}]
     )
     uow.commit()
     assert hunt.list_matches(uow, bob, min_score=0) == []

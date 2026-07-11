@@ -36,7 +36,7 @@ def test_es_boards_are_not_selected_for_a_uk_only_query() -> None:
 def test_onsite_geo_boards_are_excluded_from_a_remote_only_query() -> None:
     remote_es = {s.slug for s in registry.sources_for(countries=["ES"], remote=True)}
     assert not (_ES_SLUGS & remote_es)  # onsite geo boards drop out when remote is wanted
-    assert "remoteok" in remote_es  # but remote-first boards remain
+    assert "weworkremotely" in remote_es  # but remote-first boards remain
 
 
 def test_every_geo_source_renders_an_http_search_url_with_the_query() -> None:
@@ -55,8 +55,8 @@ def test_global_remote_boards_still_match_gb_and_es() -> None:
     # "global" country tag matches any country, so remote boards appear too.
     gb = {s.slug for s in registry.sources_for(countries=["GB"])}
     es = {s.slug for s in registry.sources_for(countries=["ES"])}
-    assert "remoteok" in gb
-    assert "remoteok" in es
+    assert "weworkremotely" in gb
+    assert "weworkremotely" in es
 
 
 def test_all_shipped_packs_including_geo_load_without_duplicate_slugs() -> None:

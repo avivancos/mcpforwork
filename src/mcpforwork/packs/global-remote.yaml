@@ -7,19 +7,15 @@ pack:
 # Sector-agnostic remote boards. countries=[global] matches any candidate
 # country; sectors=[any] matches any target sector. The client fills {query}
 # with the profile's target titles.
+#
+# NOTE (S2.5): these dedicated remote boards are SPAs / Cloudflare-protected and
+# their URL-based search could NOT be browser-verified the way the country
+# aggregators (Indeed/Reed/Adzuna/InfoJobs) were. Their url_templates use each
+# board's documented query-param but liveness is UNVERIFIED. RemoteOK was dropped
+# entirely — it is tag-path (remote-{tag}-jobs) and takes quote_plus's "+"
+# literally. Follow-up card: verify these + add a "search_box" playbook mode for
+# SPA boards where the client types the query instead of a url_template.
 sources:
-  - slug: remoteok
-    name: RemoteOK
-    base_url: https://remoteok.com
-    countries: [global]
-    sectors: [any]
-    remote: true
-    tier: free
-    enabled: true
-    search_playbook:
-      url_template: "https://remoteok.com/remote-{query}-jobs"
-      result_hint: "Listings are the main feed; scroll to load more (no pagination)."
-
   - slug: remotive
     name: Remotive
     base_url: https://remotive.com

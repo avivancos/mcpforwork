@@ -125,15 +125,15 @@ def test_no_shipped_template_puts_the_query_in_the_url_path() -> None:
 def test_all_shipped_packs_load_and_validate() -> None:
     sources = registry.load_sources()
     assert len(sources) >= 10  # a meaningful seed
-    assert "remoteok" in sources
+    assert "weworkremotely" in sources
     # url_template renders with a query
-    assert "{query}" not in sources["remoteok"].search_url("data engineer")
+    assert "{query}" not in sources["weworkremotely"].search_url("data engineer")
 
 
 def test_sources_for_selects_by_country_and_remote() -> None:
     # A global-remote board is returned for any country when remote is wanted.
     remote_global = registry.sources_for(countries=["FR"], remote=True)
-    assert any(s.slug == "remoteok" for s in remote_global)
+    assert any(s.slug == "weworkremotely" for s in remote_global)
     # A US-only board is not returned for a DE-only, onsite query.
     de_sources = registry.sources_for(countries=["DE"])
     assert all("US" not in s.countries for s in de_sources if "global" not in s.countries)

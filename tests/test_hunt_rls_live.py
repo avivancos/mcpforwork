@@ -37,7 +37,7 @@ def test_findings_scouted_by_one_tenant_are_invisible_to_another(two_users) -> N
         alice.set_user_context(1)
         profiles.create_profile(alice, 1, {"target_titles": ["Data Engineer"]})
         hunt.submit_findings(
-            alice, 1, "remoteok", [{"url": "https://x.com/1", "title": "Data Engineer"}]
+            alice, 1, "weworkremotely", [{"url": "https://x.com/1", "title": "Data Engineer"}]
         )
         alice.commit()
 
@@ -58,7 +58,7 @@ def test_unset_context_reads_no_findings_even_for_the_right_user_id(two_users) -
         alice.set_user_context(1)
         profiles.create_profile(alice, 1, {"target_titles": ["Data Engineer"]})
         hunt.submit_findings(
-            alice, 1, "remoteok", [{"url": "https://x.com/1", "title": "Data Engineer"}]
+            alice, 1, "weworkremotely", [{"url": "https://x.com/1", "title": "Data Engineer"}]
         )
         alice.commit()
 

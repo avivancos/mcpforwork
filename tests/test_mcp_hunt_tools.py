@@ -45,12 +45,12 @@ def test_hunt_plan_without_a_profile_returns_error(mcp_env) -> None:
 def test_list_sources_tool_returns_the_seed_packs(mcp_env) -> None:
     result = json.loads(server.list_sources())
     assert result["count"] > 0
-    assert any(s["slug"] == "remoteok" for s in result["sources"])
+    assert any(s["slug"] == "weworkremotely" for s in result["sources"])
 
 
 def test_source_playbook_tool(mcp_env) -> None:
-    playbook = json.loads(server.source_playbook("remoteok", "data engineer"))
-    assert playbook["slug"] == "remoteok"
+    playbook = json.loads(server.source_playbook("weworkremotely", "data engineer"))
+    assert playbook["slug"] == "weworkremotely"
     assert "data" in playbook["search_url"].lower()
 
 
