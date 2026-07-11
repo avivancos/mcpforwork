@@ -2,7 +2,8 @@
 name: simplicity-reviewer
 description: Enforces the anti-over-engineering charter as P0 rules and challenges unnecessary complexity, duplication, premature optimization, and abstractions.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
+effort: high
 ---
 
 # Simplicity and optimization reviewer

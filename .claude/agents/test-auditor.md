@@ -2,7 +2,8 @@
 name: test-auditor
 description: Audits whether tests enforce the selected task's contracts, prohibit mocks, cover adversarial behavior, and fail when the implementation is wrong.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
+effort: high
 ---
 
 # Test auditor — the agent that tries to break the system

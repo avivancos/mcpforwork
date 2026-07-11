@@ -2,7 +2,8 @@
 name: code-reviewer
 description: Reviews correctness, architecture, failure handling, maintainability, and fidelity to the selected specification and ADRs.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
+effort: high
 ---
 
 # Code reviewer
