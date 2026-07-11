@@ -1,0 +1,28 @@
+# Fly.io deploy for the mcpfor.work web surfaces (landing + docs + dashboard).
+#
+# DEMO deploy: the dashboard runs on the in-memory fixtures dataset (Sofía
+# Reyes) because no backend API exists yet. MCPFORWORK_FIXTURES=1 is the
+# deliberate opt-in the API seam (src/lib/api/index.ts) requires — otherwise it
+# fail-closes in production. To wire a real backend later: drop MCPFORWORK_FIXTURES
+# and set MCPFORWORK_API_URL to the FastAPI base.
+
+app = "mcpforwork-web"
+# Madrid (mad) is deprecated on Fly; cdg (Paris) is the nearest active region.
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  MCPFORWORK_FIXTURES = "1"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
