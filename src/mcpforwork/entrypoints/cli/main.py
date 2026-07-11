@@ -43,11 +43,12 @@ def _init() -> int:
     return 0
 
 
-def _serve() -> int:
-    """Run the stdio MCP server (the sanctioned cli -> mcp launcher edge)."""
-    from mcpforwork.entrypoints.mcp.server import main as mcp_main
-
-    mcp_main()
+def _serve(run=None) -> int:
+    """Run the stdio MCP server (the sanctioned cli -> mcp launcher edge). `run`
+    is injectable so dispatch is testable without launching the blocking loop."""
+    if run is None:
+        from mcpforwork.entrypoints.mcp.server import main as run
+    run()
     return 0
 
 

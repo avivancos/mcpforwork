@@ -51,6 +51,14 @@ def test_help_exits_zero(capsys):
     assert "serve" in help_text and "init" in help_text
 
 
+def test_serve_invokes_the_runner() -> None:
+    from mcpforwork.entrypoints.cli.main import _serve
+
+    called: list[bool] = []
+    assert _serve(run=lambda: called.append(True)) == 0
+    assert called == [True]  # serve delegates to the server runner, not init
+
+
 def test_serve_dispatch_target_is_importable() -> None:
     # `serve` delegates to the MCP server's main; a rename would break the
     # shipped `mcpforwork serve` command (import-linter checks module edges, not
