@@ -96,10 +96,10 @@ decisions had to be fixed before any code existed.
   against `created_at`; correct while PG runs UTC (the test container does).
   A non-UTC hosted PG shifts the daily-cap window — normalise (timestamptz or
   set the DB timezone) on the hosted deploy card (S6).
-- **[written rejection — kept vocabulary]** `verify` step kind and the
-  `submitted → verified` transition are defined but not yet wired (the
-  confirmation-page check is a plan feature; 2 tokens, harmless). Wire or drop
-  by S8.
+- **[written rejection — kept vocabulary]** `verify` step kind, the
+  `submitted → verified` transition, and the `draft`/`abandoned` states are
+  defined but not yet wired (confirmation-page check is a plan feature; an
+  abandon_application tool is carded). Wire or drop by S8.
 - **[note]** `applications.apply_method` is write-only until the S8 calibration
   reads it. `resolve_field(field_type)` param is card-specified, unused today.
 - **[fixed in-gate]** State machine now ENFORCED in services (submit_requested
