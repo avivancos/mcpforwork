@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -223,6 +223,16 @@ CREATE TABLE playbook_reports (
 );
 CREATE INDEX idx_playbook_reports_source ON playbook_reports(source_slug);
 """,
+    8: """
+CREATE TABLE magic_link_tokens (
+  id         INTEGER PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT NOT NULL UNIQUE,   -- sha256 hex of the raw token; raw never stored
+  expires_at INTEGER NOT NULL,       -- Unix epoch seconds (dialect-uniform, tz-free)
+  used_at    INTEGER,                -- Unix epoch when redeemed; NULL = unused
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+""",
 }
 
 # Migrations whose script recreates a table that FK children reference; these
@@ -239,6 +249,7 @@ _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "005_assets.sql": 5,
     "006_applications.sql": 6,
     "007_playbook_reports.sql": 7,
+    "008_magic_link_tokens.sql": 8,
 }
 
 
