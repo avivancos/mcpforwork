@@ -26,6 +26,15 @@ def _seed() -> int:
 def test_full_apply_flow_through_the_tools(mcp_env) -> None:
     fid = _seed()
     assert json.loads(server.approve_match(fid))["status"] == "approved"
+    # Persisted on a fresh connection (kills a commit-dropping approve tool).
+    fresh = connect(mcp_env)
+    try:
+        assert (
+            fresh.fetchone("SELECT status FROM explore_findings WHERE id = ?", (fid,))["status"]
+            == "approved"
+        )
+    finally:
+        fresh.close()
 
     brief = json.loads(server.get_generation_brief(fid, "cover_letter"))
     assert "databricks" in brief["job"]["keywords"]
