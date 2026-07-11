@@ -43,6 +43,9 @@ def test_request_reuses_an_existing_user_by_email(uow: SqlUnitOfWork) -> None:
 def test_request_rejects_a_malformed_email(uow: SqlUnitOfWork) -> None:
     assert "error" in auth_session.request_magic_link(uow, "not-an-email", now=_T0)
     assert "error" in auth_session.request_magic_link(uow, "   ", now=_T0)
+    # control chars / interior whitespace (CR/LF header-injection guard)
+    assert "error" in auth_session.request_magic_link(uow, "a@b.com\r\nBcc: x@y.com", now=_T0)
+    assert "error" in auth_session.request_magic_link(uow, "a b@c.com", now=_T0)
 
 
 def test_redeem_returns_the_user_and_is_single_use(uow: SqlUnitOfWork) -> None:

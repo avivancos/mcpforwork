@@ -51,7 +51,14 @@ def request_magic_link(
     token. Returns the RAW token (for the caller to deliver) — only its hash is
     stored. Caller commits."""
     email = email.strip().lower()
-    if "@" not in email or email.startswith("@") or email.endswith("@"):
+    # Reject control chars / interior whitespace (a real mailer would otherwise
+    # be vulnerable to CR/LF header injection: "a@b.com\r\nBcc: evil@x.com").
+    if (
+        "@" not in email
+        or email.startswith("@")
+        or email.endswith("@")
+        or any(ord(c) < 32 or c.isspace() for c in email)
+    ):
         return {"error": "a valid email is required"}
 
     row = uow.fetchone("SELECT id FROM users WHERE email = ?", (email,))
@@ -63,7 +70,8 @@ def request_magic_link(
         "INSERT INTO magic_link_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
         (user_id, _hash_token(raw_token), expires_at),
     )
-    return {"raw_token": raw_token, "expires_at": expires_at, "user_id": user_id}
+    # `email` is the normalized, validated address — callers deliver to this.
+    return {"raw_token": raw_token, "expires_at": expires_at, "user_id": user_id, "email": email}
 
 
 def redeem_magic_link(uow: UnitOfWork, raw_token: str, *, now: datetime) -> dict[str, Any]:

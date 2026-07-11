@@ -30,6 +30,12 @@ _USER_TABLES: tuple[str, ...] = (
     "profiles",
 )
 
+# Auth-internal tables that reference users(id): ERASED on delete (so a logged-in
+# account has no orphaned rows / FK failure) but NOT included in the portability
+# export — a hash of a single-use credential is internal auth state, not user
+# content the subject provided.
+_AUTH_TABLES: tuple[str, ...] = ("magic_link_tokens",)
+
 
 def export_user_data(uow: UnitOfWork, user_id: int) -> dict[str, Any]:
     """Every row this user owns, across all per-user tables plus the `users`
@@ -71,7 +77,7 @@ def delete_user_data(uow: UnitOfWork, user_id: int) -> dict[str, Any]:
     is meant to leave no trace."""
     asset_files_removed = _erase_asset_files(uow, user_id)  # before the rows vanish
     deleted: dict[str, int] = {}
-    for table in _USER_TABLES:
+    for table in (*_USER_TABLES, *_AUTH_TABLES):
         cursor = uow.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
         deleted[table] = cursor.rowcount if cursor.rowcount is not None else 0
     cursor = uow.execute("DELETE FROM users WHERE id = ?", (user_id,))

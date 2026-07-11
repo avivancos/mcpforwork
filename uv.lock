@@ -490,6 +490,8 @@ dependencies = [
     { name = "itsdangerous" },
     { name = "mcp" },
     { name = "pyyaml" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -499,6 +501,7 @@ postgres = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx" },
     { name = "import-linter" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pytest" },
@@ -512,11 +515,14 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.2" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.1" },
     { name = "pyyaml", specifier = ">=6" },
+    { name = "starlette", specifier = ">=0.27" },
+    { name = "uvicorn", specifier = ">=0.31" },
 ]
 provides-extras = ["postgres"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "httpx", specifier = ">=0.27" },
     { name = "import-linter", specifier = ">=2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.1" },
     { name = "pytest", specifier = ">=8" },

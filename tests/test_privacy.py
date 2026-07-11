@@ -129,6 +129,30 @@ def test_export_and_delete_of_a_nonexistent_user_do_not_crash(uow: SqlUnitOfWork
     assert sum(result["deleted"].values()) == 0
 
 
+def test_delete_erases_a_users_magic_link_tokens(uow: SqlUnitOfWork) -> None:
+    # Regression: magic_link_tokens (S6.1a) has an FK to users, so erasure must
+    # clear it too or the final DELETE FROM users hits the constraint. This is
+    # the auth-internal erase path a logged-in account hits.
+    from datetime import UTC, datetime
+
+    from mcpforwork.services import auth_session
+
+    req = auth_session.request_magic_link(
+        uow, "ada@example.com", now=datetime(2026, 1, 1, tzinfo=UTC)
+    )
+    uid = req["user_id"]
+    uow.commit()
+    n = uow.fetchone("SELECT COUNT(*) AS n FROM magic_link_tokens WHERE user_id = ?", (uid,))["n"]
+    assert n == 1
+    assert privacy.delete_user_data(uow, uid)["ok"] is True
+    uow.commit()
+    gone = uow.fetchone("SELECT COUNT(*) AS n FROM magic_link_tokens WHERE user_id = ?", (uid,))[
+        "n"
+    ]
+    assert gone == 0
+    assert uow.fetchone("SELECT id FROM users WHERE id = ?", (uid,)) is None  # no FK failure
+
+
 def test_delete_is_idempotent(uow: SqlUnitOfWork) -> None:
     uid, _ = _populate(uow, "a@example.com", "https://a.com/jobs/1")
     privacy.delete_user_data(uow, uid)
