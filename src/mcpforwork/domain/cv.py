@@ -10,9 +10,15 @@ from __future__ import annotations
 
 import re
 
-_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[a-zA-Z]{2,}")
-_PHONE_RE = re.compile(r"[+\d][\d\s\-()]{6,}")
+# Bounded quantifiers: an unbounded `[\w.+-]+@` backtracks quadratically over a
+# long non-@ run of word chars (a ReDoS on the arbitrary text parse_cv accepts).
+# RFC caps: local part 64, domain label 255, TLD is short. Linear at any size.
+_EMAIL_RE = re.compile(r"[\w.+-]{1,64}@[\w-]{1,255}\.[a-zA-Z]{2,24}")
+_PHONE_RE = re.compile(r"[+\d][\d\s\-()]{6,24}")
 _URL_RE = re.compile(r"https?://\S+")
+
+# A CV over this size is pathological, not a résumé — the parse_cv tool rejects it.
+MAX_CV_CHARS = 200_000
 _LINKEDIN_RE = re.compile(r"https?://(?:www\.)?linkedin\.com/\S+", re.IGNORECASE)
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/\S+", re.IGNORECASE)
 _NAME_LABEL_RE = re.compile(r"^\s*name\s*[:\-]\s*(.+)$", re.IGNORECASE)
@@ -48,10 +54,15 @@ def _extract_name(header: list[str]) -> str | None:
         line = raw.strip()
         if not line:
             continue
+        # Anything that is clearly not a name -> None (ask the human, never invent).
         if _EMAIL_RE.search(line) or _URL_RE.search(line) or _SECTION_HEADER_RE.match(line):
-            return None  # not a name — leave it to the human
+            return None
+        if line.endswith(":"):
+            return None  # a field label ("Name:", "Contact:"), not a value
+        if sum(ch.isdigit() for ch in line) >= 7:
+            return None  # a phone / id line, not a name
         if len(line.split()) > 5:
-            return None  # a sentence, not a name (stricter than the donor)
+            return None  # a sentence, not a name
         return line
     return None
 
@@ -89,7 +100,7 @@ def extract_profile_from_cv(cv_text: str) -> dict:
             "phone": phone,
             "linkedin": _strip_trailing_punct(linkedin.group(0)) if linkedin else None,
             "github": _strip_trailing_punct(github.group(0)) if github else None,
-            "portfolio": _strip_trailing_punct(portfolio) if portfolio else None,
+            "portfolio": portfolio,  # already stripped in the loop above
         },
         "cv_text": cv_text,
     }

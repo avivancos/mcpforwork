@@ -37,3 +37,33 @@ def test_version_prints_the_package_version(capsys):
 def test_no_args_shows_usage(capsys):
     assert main([]) == 2
     assert "usage" in capsys.readouterr().err.lower()
+
+
+def test_help_exits_zero(capsys):
+    # argparse --help exits 0 via SystemExit; the serve/init/version subcommands
+    # must appear in the help so the shipped commands are discoverable.
+    import pytest
+
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "serve" in help_text and "init" in help_text
+
+
+def test_serve_dispatch_target_is_importable() -> None:
+    # `serve` delegates to the MCP server's main; a rename would break the
+    # shipped `mcpforwork serve` command (import-linter checks module edges, not
+    # symbols). Pin the symbol.
+    from mcpforwork.entrypoints.mcp.server import main as mcp_main
+
+    assert callable(mcp_main)
+
+
+def test_init_redacts_a_postgres_password(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MCPFORWORK_DB_URL", "sqlite:///" + str(tmp_path / "d.db"))
+    from mcpforwork.entrypoints.cli.main import _redact
+
+    masked = _redact("postgres://appuser:supersecret@db.internal:5432/mcpforwork")
+    assert "supersecret" not in masked
+    assert "appuser" in masked and "db.internal" in masked

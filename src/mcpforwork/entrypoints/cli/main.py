@@ -6,9 +6,23 @@ import argparse
 import importlib.metadata
 import json
 import sys
+from urllib.parse import urlsplit, urlunsplit
 
 from mcpforwork import config
 from mcpforwork.adapters.db import connect
+
+
+def _redact(url: str) -> str:
+    """Mask any password before printing a DB URL to stdout (shell history, CI
+    logs). SQLite URLs carry no secret and pass through unchanged."""
+    parts = urlsplit(url)
+    if not parts.password:
+        return url
+    host = parts.hostname or ""
+    port = f":{parts.port}" if parts.port else ""
+    netloc = f"{parts.username}:***@{host}{port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
 
 _SNIPPET = {
     "mcpServers": {
@@ -22,7 +36,7 @@ def _init() -> int:
     config.data_dir().mkdir(parents=True, exist_ok=True)
     uow = connect(config.db_url())
     uow.close()
-    print(f"Initialized {config.db_url()}")
+    print(f"Initialized {_redact(config.db_url())}")
     print("\nAdd the connector to Claude Code / Desktop (.mcp.json):\n")
     print(json.dumps(_SNIPPET, indent=2))
     print("\nThen run /setup in your client to build your profile (< 3 minutes).")
