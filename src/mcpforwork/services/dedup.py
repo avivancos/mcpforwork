@@ -2,11 +2,10 @@
 
 One invariant: never touch the same opportunity twice without knowing.
 
-- ``check_seen``: given a batch of URLs, report what the copilot already knows —
-  today that is the ``external_applications`` table (hand/external applies:
-  LinkedIn Easy Apply, apply-by-email, company web forms). The scouted
-  ``findings``/``matches`` sources are added here when the hunt pipeline lands
-  (S2), so callers should treat the returned shape as source-agnostic.
+- ``check_seen``: given a batch of URLs, report what the copilot already knows
+  across BOTH the hand-applied ``external_applications`` and the scouted
+  ``explore_findings`` — so a posting already applied to or already scouted is
+  never re-listed.
 - ``record_application``: write a hand/external application, idempotent by
   ``(user_id, dedup_hash)``, so the next ``check_seen`` skips it.
 - ``recompute_hashes``: re-canonicalise stored hashes and merge tracking-param
@@ -31,13 +30,13 @@ def _utcnow_iso() -> str:
 
 
 def check_seen(uow: UnitOfWork, user_id: int, urls: Sequence[str]) -> dict[str, Any]:
-    """Report what the copilot already knows about each URL.
+    """Report what the copilot already knows about each URL — across BOTH the
+    hand-applied `external_applications` and the scouted `explore_findings`.
 
-    Per URL: ``{url, seen, applied, discarded, status, source,
-    external_application_id, recommendation}`` where ``recommendation`` is
-    ``"skip"`` when already recorded and ``"new"`` otherwise. External
-    applications are terminal (applied), so a hit is both ``seen`` and
-    ``applied``.
+    Per URL: ``{url, seen, applied, discarded, status, source, finding_id,
+    external_application_id, recommendation}``. ``recommendation`` is ``"skip"``
+    when already known (scouted or applied) and ``"new"`` otherwise — so the
+    scout never re-lists a posting it already has.
     """
     items: list[dict[str, Any]] = []
     new_urls: list[str] = []
@@ -51,15 +50,30 @@ def check_seen(uow: UnitOfWork, user_id: int, urls: Sequence[str]) -> dict[str, 
             "SELECT id FROM external_applications WHERE dedup_hash = ? AND user_id = ?",
             (digest, user_id),
         )
-        seen = ext is not None
+        finding = uow.fetchone(
+            "SELECT id, status FROM explore_findings WHERE dedup_hash = ? AND user_id = ?",
+            (digest, user_id),
+        )
+        seen = ext is not None or finding is not None
+        applied = ext is not None or (
+            finding is not None and finding["status"] == "applied_external"
+        )
+        discarded = finding is not None and finding["status"] == "discarded"
+        if ext is not None:
+            source, status = "external_application", "applied_external"
+        elif finding is not None:
+            source, status = "finding", finding["status"]
+        else:
+            source, status = None, None
         items.append(
             {
                 "url": url,
                 "seen": seen,
-                "applied": seen,
-                "discarded": False,
-                "status": "applied_external" if seen else None,
-                "source": "external_application" if seen else None,
+                "applied": applied,
+                "discarded": discarded,
+                "status": status,
+                "source": source,
+                "finding_id": finding["id"] if finding else None,
                 "external_application_id": ext["id"] if ext else None,
                 "recommendation": "skip" if seen else "new",
             }
@@ -101,6 +115,15 @@ def record_application(
     channel = (channel or "external").strip()
     digest = dedup_hash(url)
     when = applied_at or _utcnow_iso()
+
+    # Link to a scouted finding of the same posting when the caller did not name
+    # one, so the external application and the finding stay tied.
+    if finding_id is None:
+        match = uow.fetchone(
+            "SELECT id FROM explore_findings WHERE dedup_hash = ? AND user_id = ?",
+            (digest, user_id),
+        )
+        finding_id = match["id"] if match else None
 
     existing = uow.fetchone(
         "SELECT id FROM external_applications WHERE dedup_hash = ? AND user_id = ?",
@@ -146,10 +169,25 @@ def record_application(
             ),
         )
 
+    # Flip a linked finding to the terminal applied_external state so the hunt
+    # pipeline stops re-surfacing it.
+    if finding_id is not None:
+        uow.execute(
+            "UPDATE explore_findings SET status = 'applied_external', last_seen = ?"
+            " WHERE id = ? AND user_id = ?",
+            (when, finding_id, user_id),
+        )
+
     audit.record(
         uow, user_id, "record_application", {"url": url, "channel": channel, "deduped": deduped}
     )
-    return {"ok": True, "external_application_id": ext_id, "deduped": deduped, "url": url}
+    return {
+        "ok": True,
+        "external_application_id": ext_id,
+        "finding_id": finding_id,
+        "deduped": deduped,
+        "url": url,
+    }
 
 
 def recompute_hashes(uow: UnitOfWork, user_id: int) -> dict[str, Any]:

@@ -18,7 +18,7 @@ from mcpforwork.adapters.db import SqlUnitOfWork, connect
 from mcpforwork.domain.profile import ProfileValidationError
 from mcpforwork.entrypoints.mcp import guidance
 from mcpforwork.entrypoints.mcp.guidance import SERVER_INSTRUCTIONS
-from mcpforwork.services import audit, profiles
+from mcpforwork.services import audit, dedup, hunt, profiles
 
 mcp = FastMCP("mcpforwork", instructions=SERVER_INSTRUCTIONS)
 
@@ -220,6 +220,115 @@ def import_from_url_findings(url: str, fields: dict) -> str:
     return _ok(
         "import_from_url_findings",
         {"ok": True, "profile_id": pid, "profile": prof, "source": url},
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Hunt tools
+# --------------------------------------------------------------------------- #
+@mcp.tool()
+def hunt_plan() -> str:
+    """Per-source search playbooks for the active profile — the URLs YOU open in
+    the user's browser to find postings."""
+    uow, user_id = _uow()
+    try:
+        plan = hunt.hunt_plan(uow, user_id)
+    finally:
+        uow.close()
+    if "error" in plan:
+        return _fail(plan["error"])
+    return _ok("hunt_plan", plan)
+
+
+@mcp.tool()
+def source_playbook(slug: str, query: str = "") -> str:
+    """The full search + apply playbook for one source."""
+    uow, _ = _uow()
+    try:
+        playbook = hunt.source_playbook(slug, query)
+    finally:
+        uow.close()
+    if "error" in playbook:
+        return _fail(playbook["error"])
+    return _ok("source_playbook", playbook)
+
+
+@mcp.tool()
+def list_sources(countries: list[str] | None = None, sectors: list[str] | None = None) -> str:
+    """List enabled sources, optionally filtered by country/sector tags."""
+    uow, _ = _uow()
+    try:
+        sources = hunt.list_sources(countries, sectors)
+    finally:
+        uow.close()
+    return _ok("list_sources", {"count": len(sources), "sources": sources})
+
+
+@mcp.tool()
+def submit_findings(source_slug: str, findings: list[dict]) -> str:
+    """Ingest postings YOU extracted from a source: deduped, scored against the
+    profile, and persisted. Each finding needs at least url + title."""
+    uow, user_id = _uow()
+    try:
+        result = hunt.submit_findings(uow, user_id, source_slug, findings)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("submit_findings", result)
+
+
+@mcp.tool()
+def check_seen(urls: list[str]) -> str:
+    """Report which URLs the copilot already knows (scouted or applied). Only
+    browse/apply the ones marked 'new'."""
+    uow, user_id = _uow()
+    try:
+        result = dedup.check_seen(uow, user_id, urls)
+    finally:
+        uow.close()
+    return _ok("check_seen", result)
+
+
+@mcp.tool()
+def list_matches(min_score: int = 0, status: str | None = None, limit: int = 50) -> str:
+    """The scouted matches, best score first."""
+    uow, user_id = _uow()
+    try:
+        matches = hunt.list_matches(uow, user_id, min_score=min_score, status=status, limit=limit)
+    finally:
+        uow.close()
+    return _ok("list_matches", {"count": len(matches), "matches": matches})
+
+
+@mcp.tool()
+def get_match(finding_id: int) -> str:
+    """Inspect one scouted match by id."""
+    uow, user_id = _uow()
+    try:
+        match = hunt.get_match(uow, user_id, finding_id)
+    finally:
+        uow.close()
+    if match is None:
+        return _fail(f"match {finding_id} not found")
+    return _ok("get_match", {"match": match})
+
+
+@mcp.prompt(name="hunt")
+def hunt_session() -> str:
+    """The /hunt playbook: turn the profile into searches, browse, ingest, review."""
+    return (
+        "Run a hunt for the active profile:\n"
+        "1. Call hunt_plan to get per-source search URLs.\n"
+        "2. For each source, open its search_url in the user's browser and extract "
+        "the postings (url, title, company_name, location, remote_scope, salary_text, "
+        "description).\n"
+        "3. Before listing, you may call check_seen(urls) and skip any marked 'skip'.\n"
+        "4. Call submit_findings(source_slug, findings) — the server dedups against "
+        "what's already scouted/applied and scores each against the profile.\n"
+        "5. Call list_matches(min_score=40) to review what scored well.\n"
+        "Never fabricate postings; only submit what you actually saw. Never auto-apply."
     )
 
 

@@ -2,18 +2,11 @@
 
 import json
 
-import pytest
-
 from mcpforwork.adapters.db import connect
 from mcpforwork.entrypoints.mcp import server
 from mcpforwork.services import profiles
 
-
-@pytest.fixture
-def mcp_env(tmp_path, monkeypatch):
-    monkeypatch.setenv("MCPFORWORK_DB_URL", f"sqlite:///{tmp_path / 'm.db'}")
-    monkeypatch.setenv("MCPFORWORK_USER_ID", "1")
-    return f"sqlite:///{tmp_path / 'm.db'}"
+# mcp_env fixture is in conftest.py — points the tools' _uow() at a tmp SQLite DB.
 
 
 def test_update_creates_the_active_profile_when_none_exists(mcp_env) -> None:

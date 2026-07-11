@@ -114,6 +114,40 @@ def test_a_user_cannot_see_another_users_applications(uow: SqlUnitOfWork) -> Non
     )
 
 
+def test_check_seen_flags_a_scouted_finding_as_seen(uow: SqlUnitOfWork) -> None:
+    user_id = _make_user(uow, "u@example.com")
+    url = "https://example.com/jobs/77"
+    uow.insert(
+        "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title, status)"
+        " VALUES (?, ?, ?, ?, ?, 'new')",
+        (user_id, "remoteok", dedup_hash(url), url, "Data Engineer"),
+    )
+    uow.commit()
+    item = dedup.check_seen(uow, user_id, [url])["items"][0]
+    assert item["recommendation"] == "skip"
+    assert item["source"] == "finding"
+    assert item["applied"] is False  # scouted, not yet applied
+
+
+def test_record_application_links_and_flips_a_matching_finding(uow: SqlUnitOfWork) -> None:
+    user_id = _make_user(uow, "u@example.com")
+    url = "https://example.com/jobs/77"
+    fid = uow.insert(
+        "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title, status)"
+        " VALUES (?, ?, ?, ?, ?, 'new')",
+        (user_id, "remoteok", dedup_hash(url), url, "Data Engineer"),
+    )
+    uow.commit()
+
+    result = dedup.record_application(uow, user_id, url=url, channel="email")
+    uow.commit()
+    assert result["finding_id"] == fid
+    status = uow.fetchone("SELECT status FROM explore_findings WHERE id = ?", (fid,))["status"]
+    assert status == "applied_external"
+    # And check_seen now reports it applied.
+    assert dedup.check_seen(uow, user_id, [url])["items"][0]["applied"] is True
+
+
 def test_recompute_merges_stale_tracking_param_duplicates(uow: SqlUnitOfWork) -> None:
     # Simulate two rows stored (via direct SQL, pre-canonicalisation) with
     # different stale hashes for URLs that canonicalise to the same posting.

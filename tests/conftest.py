@@ -47,6 +47,15 @@ def uow(tmp_path: Path) -> Iterator["object"]:
         unit.close()
 
 
+@pytest.fixture
+def mcp_env(tmp_path: Path, monkeypatch) -> str:
+    """Point the MCP tools' _uow() at a real tmp SQLite database (user 1)."""
+    url = f"sqlite:///{tmp_path / 'm.db'}"
+    monkeypatch.setenv("MCPFORWORK_DB_URL", url)
+    monkeypatch.setenv("MCPFORWORK_USER_ID", "1")
+    return url
+
+
 @pytest.fixture(
     params=[
         pytest.param("sqlite", id="sqlite"),

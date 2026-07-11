@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -112,7 +112,66 @@ CREATE TABLE external_applications (
 CREATE INDEX idx_extapp_user ON external_applications(user_id);
 """
 
-MIGRATIONS: dict[int, str] = {2: _PROFILES_SQLITE, 3: _EXTERNAL_APPS_SQLITE}
+# explore_findings: browser-scouted postings (the hunt pipeline's store) — the
+# second cross-pipeline dedup + "match" source alongside external_applications.
+# This migration also finally adds external_applications.finding_id's FK to
+# explore_findings (deferred in S1.4): SQLite can only add the constraint by
+# recreating the table. external_applications has no FK children, so the
+# recreate needs no foreign-key toggle; existing finding_id values are all NULL.
+_FINDINGS_SQLITE = """
+CREATE TABLE explore_findings (
+  id              INTEGER PRIMARY KEY,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  source_slug     TEXT NOT NULL,
+  dedup_hash      TEXT NOT NULL,
+  url             TEXT NOT NULL,
+  title           TEXT NOT NULL,
+  company_name    TEXT,
+  location        TEXT,
+  remote_scope    TEXT,
+  salary_text     TEXT,
+  description     TEXT,
+  score           INTEGER,
+  score_breakdown TEXT,   -- JSON
+  status          TEXT NOT NULL DEFAULT 'new',
+  action          TEXT,
+  first_seen      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  last_seen       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  UNIQUE(user_id, dedup_hash)
+);
+CREATE INDEX idx_findings_user ON explore_findings(user_id);
+CREATE INDEX idx_findings_score ON explore_findings(score DESC);
+
+CREATE TABLE external_applications_new (
+  id           INTEGER PRIMARY KEY,
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  finding_id   INTEGER REFERENCES explore_findings(id),
+  url          TEXT,
+  company_name TEXT,
+  title        TEXT,
+  channel      TEXT NOT NULL,
+  method       TEXT,
+  dedup_hash   TEXT NOT NULL,
+  applied_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  notes        TEXT,
+  UNIQUE(user_id, dedup_hash)
+);
+INSERT INTO external_applications_new
+  (id, user_id, finding_id, url, company_name, title,
+   channel, method, dedup_hash, applied_at, notes)
+  SELECT id, user_id, finding_id, url, company_name, title,
+         channel, method, dedup_hash, applied_at, notes
+  FROM external_applications;
+DROP TABLE external_applications;
+ALTER TABLE external_applications_new RENAME TO external_applications;
+CREATE INDEX idx_extapp_user ON external_applications(user_id);
+"""
+
+MIGRATIONS: dict[int, str] = {
+    2: _PROFILES_SQLITE,
+    3: _EXTERNAL_APPS_SQLITE,
+    4: _FINDINGS_SQLITE,
+}
 
 # Migrations whose script recreates a table that FK children reference; these
 # run with foreign-key enforcement toggled off around the script.
@@ -124,6 +183,7 @@ _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "001_initial.sql": 1,
     "002_profiles.sql": 2,
     "003_external_applications.sql": 3,
+    "004_findings.sql": 4,
 }
 
 

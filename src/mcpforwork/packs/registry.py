@@ -99,7 +99,9 @@ def sources_for(
     for src in load_sources().values():
         if enabled_only and not src.enabled:
             continue
-        if remote is not None and remote and not src.remote:
+        if remote is True and not src.remote:
+            continue
+        if remote is False and src.remote:
             continue
         if countries and not _tags_match(src.countries, countries, "global"):
             continue
