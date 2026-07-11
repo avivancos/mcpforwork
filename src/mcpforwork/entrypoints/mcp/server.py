@@ -429,6 +429,57 @@ def start_application(finding_id: int) -> str:
 
 
 @mcp.tool()
+def report_apply_progress(
+    application_id: int, step_id: int, status: str, observed: str = "", obstacle: str = ""
+) -> str:
+    """Report a step's outcome (ok | blocked | mismatch). The server answers
+    with the next step, a repair, or a human-pause — never a submit."""
+    uow, user_id = _uow()
+    try:
+        result = apply_service.report_apply_progress(
+            uow, user_id, application_id, step_id, status, observed, obstacle
+        )
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("report_apply_progress", result)
+
+
+@mcp.tool()
+def resolve_field(
+    application_id: int, field_label: str, field_type: str = "", options: list[str] | None = None
+) -> str:
+    """Deterministic answer for an unpredicted form question — from the profile
+    or saved answers; otherwise ask_user (never invent)."""
+    uow, user_id = _uow()
+    try:
+        result = apply_service.resolve_field(
+            uow, user_id, application_id, field_label, field_type, options
+        )
+    finally:
+        uow.close()
+    if "error" in result:
+        return _fail(result["error"])
+    return _ok("resolve_field", result)
+
+
+@mcp.tool()
+def save_form_answer(field_label: str, answer: str) -> str:
+    """Persist a HUMAN-confirmed screener answer so it is never asked twice."""
+    uow, user_id = _uow()
+    try:
+        result = apply_service.save_form_answer(uow, user_id, field_label, answer)
+        if "error" in result:
+            return _fail(result["error"])
+        uow.commit()
+    finally:
+        uow.close()
+    return _ok("save_form_answer", result)
+
+
+@mcp.tool()
 def record_application(url: str, channel: str = "", method: str = "", notes: str = "") -> str:
     """Record that the HUMAN submitted an application (any channel) so the
     copilot never re-surfaces the posting. Idempotent per URL."""

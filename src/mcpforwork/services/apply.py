@@ -22,6 +22,20 @@ MAX_APPLICATIONS_PER_DAY = 10
 
 _OPEN_STATES = ("draft", "filling", "awaiting_human")
 
+_OBSTACLES = frozenset({"captcha", "login", "2fa", "hostile_bot_check"})
+
+# Profile fields resolvable from a form label's tokens (deterministic answers).
+_LABEL_TO_FIELD = {
+    "name": "full_name",
+    "email": "contact_email",
+    "city": "city",
+    "country": "country",
+}
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 def _today_started_count(uow: UnitOfWork, user_id: int) -> int:
     day = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -93,3 +107,149 @@ def start_application(uow: UnitOfWork, user_id: int, finding_id: int) -> dict[st
         if asset_rows
         else ["no drafted assets for this match — consider /apply first"],
     }
+
+
+def _load_application(uow: UnitOfWork, user_id: int, application_id: int) -> dict[str, Any] | None:
+    row = uow.fetchone(
+        "SELECT * FROM applications WHERE id = ? AND user_id = ?", (application_id, user_id)
+    )
+    if row is None:
+        return None
+    row = dict(row)
+    row["steps"] = json.loads(row["steps"] or "[]")
+    return row
+
+
+def report_apply_progress(
+    uow: UnitOfWork,
+    user_id: int,
+    application_id: int,
+    step_id: int,
+    status: str,
+    observed: str = "",
+    obstacle: str = "",
+) -> dict[str, Any]:
+    """The heartbeat of the apply loop: the client reports each step; the server
+    answers with the next step, a repair, or a human-pause. Never a submit."""
+    app = _load_application(uow, user_id, application_id)
+    if app is None:
+        return {"error": f"application {application_id} not found"}
+    if status not in ("ok", "blocked", "mismatch"):
+        return {"error": "status must be ok | blocked | mismatch"}
+    steps = app["steps"]
+    current = next((s for s in steps if s["step_id"] == step_id), None)
+    if current is None:
+        return {"error": f"unknown step {step_id}"}
+
+    audit.record(
+        uow,
+        user_id,
+        "report_apply_progress",
+        {
+            "application_id": application_id,
+            "step_id": step_id,
+            "status": status,
+            "obstacle": obstacle or None,
+        },
+    )
+
+    if status == "mismatch":
+        return {
+            "state": app["state"],
+            "retry_step": current,
+            "repair": (
+                "The page diverged from the plan. Re-read the form, adapt to what is "
+                "actually on screen, and retry this step. Observed: " + (observed or "n/a")
+            ),
+        }
+
+    if status == "blocked":
+        kind = obstacle if obstacle in _OBSTACLES else "unknown"
+        return {
+            "state": app["state"],
+            "pause": True,
+            "obstacle": kind,
+            "instruction": (
+                "Pause. Ask the HUMAN to resolve the "
+                f"{kind} in their own browser (they are present — it is their session); "
+                "captchas and logins are always human-solved. When they confirm, call "
+                "report_apply_progress(status='ok') for this step to resume."
+            ),
+        }
+
+    # status == ok — advance past this step.
+    idx = steps.index(current)
+    uow.execute(
+        "UPDATE applications SET current_step = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+        (current["step_id"], _utcnow_iso(), application_id, user_id),
+    )
+    if idx + 1 < len(steps):
+        return {"state": app["state"], "next_step": steps[idx + 1]}
+    # Plan exhausted: the form is filled and reviewed — the human decides next.
+    uow.execute(
+        "UPDATE applications SET state = 'awaiting_human', updated_at = ?"
+        " WHERE id = ? AND user_id = ?",
+        (_utcnow_iso(), application_id, user_id),
+    )
+    return {
+        "state": "awaiting_human",
+        "next_action": (
+            "All steps done. Call request_submit(application_id) — the human reviews "
+            "and decides; you never click Submit."
+        ),
+    }
+
+
+def resolve_field(
+    uow: UnitOfWork,
+    user_id: int,
+    application_id: int,
+    field_label: str,
+    field_type: str = "",
+    options: list[str] | None = None,
+) -> dict[str, Any]:
+    """Deterministic answer for a screener question the plan didn't predict:
+    profile fields first, then saved form_answers; otherwise ask the human."""
+    app = _load_application(uow, user_id, application_id)
+    if app is None:
+        return {"error": f"application {application_id} not found"}
+    profile = profiles.get_profile(uow, user_id)
+    if profile is None:
+        return {"error": "no active profile"}
+
+    label_tokens = {t for t in field_label.lower().replace("*", " ").split() if t}
+    for token, field in _LABEL_TO_FIELD.items():
+        if token in label_tokens and profile.get(field):
+            return {"field_label": field_label, "answer": profile[field], "source": field}
+
+    answers: dict[str, str] = json.loads(profile.get("form_answers") or "{}")
+    for saved_label, saved_answer in answers.items():
+        if saved_label.lower() == field_label.lower():
+            return {"field_label": field_label, "answer": saved_answer, "source": "form_answers"}
+
+    return {
+        "field_label": field_label,
+        "ask_user": True,
+        "instruction": (
+            "Ask the human for this answer, then persist it with save_form_answer so "
+            "it is never asked twice. Never invent an answer."
+        ),
+        "options": options or [],
+    }
+
+
+def save_form_answer(
+    uow: UnitOfWork, user_id: int, field_label: str, answer: str
+) -> dict[str, Any]:
+    """Persist a human-confirmed screener answer to the profile (progressive)."""
+    profile = profiles.get_profile(uow, user_id)
+    if profile is None:
+        return {"error": "no active profile"}
+    answers: dict[str, str] = json.loads(profile.get("form_answers") or "{}")
+    answers[field_label] = answer
+    uow.execute(
+        "UPDATE profiles SET form_answers = ? WHERE id = ? AND user_id = ?",
+        (json.dumps(answers), profile["id"], user_id),
+    )
+    audit.record(uow, user_id, "save_form_answer", {"field_label": field_label})
+    return {"ok": True, "saved": field_label}
