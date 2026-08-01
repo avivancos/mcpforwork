@@ -33,6 +33,10 @@ class _CapturingMailer:
 def env(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("MCPFORWORK_DB_URL", f"sqlite:///{tmp_path / 'api.db'}")
     monkeypatch.setenv("MCPFORWORK_SESSION_SECRET", _SECRET)
+    # Hermetic: tenant-email / redirect config from the developer's shell must
+    # not leak into these tests (S6.8 review P2).
+    monkeypatch.delenv("MCPFORWORK_USER_EMAIL", raising=False)
+    monkeypatch.delenv("MCPFORWORK_POST_LOGIN_REDIRECT", raising=False)
     return tmp_path
 
 
@@ -187,7 +191,9 @@ def test_connection_reflects_real_activity_and_the_tenant_email(api):
     client, _, env = api
     fresh = client.get("/v1/connection").json()
     assert fresh["connected"] is False
-    assert fresh["tenantEmail"] == "ada@example.com"
+    # tenantEmail is the CONFIGURED MCP tenant email (S6.8), not the session
+    # email — a login under a different address shows the mismatch here.
+    assert fresh["tenantEmail"] == "local@self-host"
 
     uid = _uid(env)
     uow = connect(f"sqlite:///{env / 'api.db'}")

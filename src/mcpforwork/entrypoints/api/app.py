@@ -25,7 +25,7 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -286,7 +286,12 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
             uow.commit()
         finally:
             uow.close()
-        response = _JSON({"ok": True})
+        # Fixed-config post-login redirect (compose lands the browser on the
+        # dashboard); never client-controlled. Unset → JSON for API clients.
+        redirect = config.post_login_redirect()
+        response: Response = (
+            RedirectResponse(redirect, status_code=302) if redirect else _JSON({"ok": True})
+        )
         response.set_cookie(
             _SESSION_COOKIE,
             cookie,
@@ -468,7 +473,9 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         with _authed(request) as (uow, auth):
             if auth is None:
                 return _unauthorized()
-            email = uow.fetchone("SELECT email FROM users WHERE id = ?", (auth["uid"],))["email"]
+            # The CONFIGURED MCP tenant email (S6.8): if the human logged in
+            # with a different address, the mismatch is visible right here.
+            email = config.local_user_email()
             last = uow.fetchone(
                 "SELECT created_at FROM audit_log WHERE user_id = ? ORDER BY id DESC LIMIT 1",
                 (auth["uid"],),

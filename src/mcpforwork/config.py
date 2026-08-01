@@ -27,13 +27,34 @@ def db_url() -> str:
     return f"sqlite:///{data_dir() / 'mcpforwork.db'}"
 
 
-def local_user_id() -> int:
-    """The tenant id for the self-host stdio MCP server.
+_DEFAULT_LOCAL_EMAIL = "local@self-host"
+
+
+def local_user_id() -> int | None:
+    """The explicitly pinned tenant id for the self-host MCP server
+    (`MCPFORWORK_USER_ID`), or None when unset — the server then resolves the
+    local user by email instead (find-or-create, S6.8 tenant alignment).
 
     The hosted/parity API resolves identity from the magic-link session cookie
     instead; this helper is only for the local MCP process.
     """
-    return int(os.environ.get("MCPFORWORK_USER_ID", "1"))
+    raw = os.environ.get("MCPFORWORK_USER_ID")
+    return int(raw) if raw else None
+
+
+def local_user_email() -> str:
+    """The self-host local user's email (`MCPFORWORK_USER_EMAIL`, default
+    `local@self-host`). The human logs into the dashboard with this same
+    address so magic-link find-or-create resolves the SAME users row the MCP
+    writes as (S6.8 tenant alignment, ADR 0006)."""
+    return os.environ.get("MCPFORWORK_USER_EMAIL") or _DEFAULT_LOCAL_EMAIL
+
+
+def post_login_redirect() -> str | None:
+    """Where `GET /v1/auth/redeem` sends the browser after setting the session
+    cookie (`MCPFORWORK_POST_LOGIN_REDIRECT` — fixed config, never
+    client-controlled). Unset → the redeem route answers JSON 200."""
+    return os.environ.get("MCPFORWORK_POST_LOGIN_REDIRECT") or None
 
 
 def db_run_migrations() -> bool:

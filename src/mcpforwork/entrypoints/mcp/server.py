@@ -47,20 +47,44 @@ INVARIANTS = [
 ]
 
 
-def _ensure_local_user(uow: SqlUnitOfWork, user_id: int) -> None:
-    """Self-host convenience: guarantee the tenant's users row exists so
-    per-user FKs resolve. Idempotent."""
-    if uow.fetchone("SELECT id FROM users WHERE id = ?", (user_id,)) is None:
-        uow.execute("INSERT INTO users (id, email) VALUES (?, ?)", (user_id, "local@self-host"))
+def _resolve_local_user(uow: SqlUnitOfWork) -> int:
+    """Resolve the self-host tenant's users row, keyed by EMAIL
+    (`MCPFORWORK_USER_EMAIL`, default local@self-host) so the dashboard
+    magic-link login — also find-or-create by email — lands on the SAME row
+    the MCP writes as (S6.8 tenant alignment, ADR 0006). Idempotent.
+
+    `MCPFORWORK_USER_ID` remains as an explicit pin (legacy/escape hatch):
+    with the pin set and the email unset, the pinned row is used as-is. With
+    BOTH set and the pinned row carrying a different email, the configuration
+    is contradictory — fail loud instead of silently splitting the tenant.
+    """
+    email = config.local_user_email()
+    pinned = config.local_user_id()
+    if pinned is not None:
+        row = uow.fetchone("SELECT id, email FROM users WHERE id = ?", (pinned,))
+        if row is not None:
+            if os.environ.get("MCPFORWORK_USER_EMAIL") and row["email"] != email:
+                raise RuntimeError(
+                    f"MCPFORWORK_USER_ID {pinned} belongs to {row['email']} but "
+                    f"MCPFORWORK_USER_EMAIL is {email} — unset one of them"
+                )
+            return pinned
+        uow.execute("INSERT INTO users (id, email) VALUES (?, ?)", (pinned, email))
         uow.commit()
+        return pinned
+    row = uow.fetchone("SELECT id FROM users WHERE email = ?", (email,))
+    if row is not None:
+        return row["id"]
+    user_id = uow.insert("INSERT INTO users (email) VALUES (?)", (email,))
+    uow.commit()
+    return user_id
 
 
 def _uow() -> tuple[SqlUnitOfWork, int]:
     """Open a migrated, tenant-scoped UnitOfWork for the self-host user."""
     uow = connect(config.db_url())
     try:
-        user_id = config.local_user_id()
-        _ensure_local_user(uow, user_id)
+        user_id = _resolve_local_user(uow)
         uow.set_user_context(user_id)
     except BaseException:
         uow.close()  # never leak the connection if setup fails

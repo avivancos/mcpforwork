@@ -1,16 +1,21 @@
-# mcpfor.work — full stack (ADR 0003 · card W1.2).
+# mcpfor.work — full stack (ADR 0003, amended by ADR 0006 · card S6.8).
 #
+#   cp .env.example .env   # then set MCPFORWORK_SESSION_SECRET (required)
 #   docker compose up --build
-#     web  → http://localhost:2200        landing · docs · dashboard (fixtures demo)
+#     web  → http://localhost:2200        landing · docs · dashboard (REAL data)
+#     api  → http://localhost:8000        parity API (magic-link auth)
 #     mcp  → http://localhost:8500/mcp    networked MCP connector (point a client here)
 #
 # Host ports are overridable to dodge collisions with other local stacks:
-#   WEB_PORT=3001 MCP_PORT=8600 docker compose up --build
+#   WEB_PORT=3001 API_PORT=8001 MCP_PORT=8600 docker compose up --build
 #
-# The dashboard runs on the in-memory demo dataset (MCPFORWORK_FIXTURES=1)
-# because the FastAPI parity API it reads from does not exist yet (S6.x gap,
-# ADR 0002). When it lands, add an `api` service and uncomment MCPFORWORK_API_URL
-# on `web` — that is the whole switch.
+# Tenant alignment (ADR 0006): the MCP writes as MCPFORWORK_USER_EMAIL — log
+# into the dashboard with THAT SAME address so the magic-link user row is the
+# row the MCP writes as. Default local@self-host works out of the box.
+#
+# Single-tenant caveat: the networked MCP endpoint has no per-connection auth
+# — acceptable for single-user self-host on a LAN; multi-tenant HTTP MCP auth
+# is hosted scope (ADR 0006).
 
 services:
   mcp:
@@ -20,11 +25,13 @@ services:
     image: mcpforwork-mcp
     environment:
       MCPFORWORK_DATA_DIR: /data
+      # The local tenant's email — see the header comment (tenant alignment).
+      MCPFORWORK_USER_EMAIL: ${MCPFORWORK_USER_EMAIL:-local@self-host}
     # Run the FastMCP server over streamable-http bound to all interfaces.
     # FastMCP's constructor hard-codes host="127.0.0.1" (overriding FASTMCP_HOST),
     # so we set it on the settings object before run() — the supported path.
     # transport_security=None disables DNS-rebinding protection for this LOCAL
-    # demo; S6.1 configures allowed_hosts + auth for a real deployment.
+    # single-tenant connector (see the caveat in the header comment).
     command:
       - python
       - -c
@@ -49,6 +56,39 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcpforwork-mcp  # same image as mcp — one build, two entrypoints
+    environment:
+      MCPFORWORK_DATA_DIR: /data
+      # Required from .env — compose errors out when unset, never a baked
+      # default (S6.1c secret posture).
+      MCPFORWORK_SESSION_SECRET: ${MCPFORWORK_SESSION_SECRET:?set MCPFORWORK_SESSION_SECRET in .env — see .env.example}
+      MCPFORWORK_USER_EMAIL: ${MCPFORWORK_USER_EMAIL:-local@self-host}
+      # Where the browser lands after magic-link redeem (the dashboard).
+      MCPFORWORK_POST_LOGIN_REDIRECT: ${MCPFORWORK_POST_LOGIN_REDIRECT:-http://localhost:2200/pipeline}
+      # LAN http has no TLS — the Secure cookie would never be stored and
+      # login could not work (S6.1c documented escape hatch). Set to 1 behind
+      # a TLS-terminating reverse proxy.
+      MCPFORWORK_COOKIE_SECURE: ${MCPFORWORK_COOKIE_SECURE:-0}
+      # The web container reaches this service as http://api:8000 — `api`
+      # must be an allowed host alongside the browser-facing localhost.
+      MCPFORWORK_ALLOWED_HOSTS: ${MCPFORWORK_ALLOWED_HOSTS:-api,localhost,127.0.0.1}
+    command: uvicorn mcpforwork.entrypoints.api.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - mcpforwork-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
   web:
     build:
       context: ./web
@@ -56,15 +96,13 @@ services:
     image: mcpforwork-web
     environment:
       NODE_ENV: production
-      # No parity API yet → run the demo dataset deliberately (the fail-closed
-      # guard in ADR 0002 refuses to boot in production without this).
-      MCPFORWORK_FIXTURES: "1"
-      # When the API service exists, drop MCPFORWORK_FIXTURES and set:
-      # MCPFORWORK_API_URL: http://api:8080
+      # The real parity API (S6.6a/b/c). No MCPFORWORK_FIXTURES — the demo
+      # dataset is opt-in for the public site only (ADR 0002 fail-closed).
+      MCPFORWORK_API_URL: http://api:8000
     ports:
       - "${WEB_PORT:-2200}:3000"
     depends_on:
-      - mcp
+      - api
     healthcheck:
       # 127.0.0.1, not localhost: alpine resolves localhost to ::1 first, but
       # the Next standalone server binds IPv4.
