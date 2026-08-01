@@ -19,6 +19,7 @@ from mcpforwork.services.briefs import ASSET_TYPES
 # a name into the statement is safe (SQL identifiers cannot be parameterized).
 # `users` is the root, handled separately (scoped by `id`, deleted last).
 _USER_TABLES: tuple[str, ...] = (
+    "sessions",
     "audit_log",
     "playbook_reports",
     "applications",

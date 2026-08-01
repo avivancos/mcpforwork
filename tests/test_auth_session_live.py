@@ -25,7 +25,7 @@ def app_conn():
     if not pg_support.admin_url():
         pytest.skip("TEST_POSTGRES_URL not set")
     admin = pg_support.admin_connect()
-    admin.execute("TRUNCATE magic_link_tokens, users RESTART IDENTITY CASCADE")
+    admin.execute("TRUNCATE magic_link_tokens, sessions, users RESTART IDENTITY CASCADE")
     admin.commit()
     admin.close()
     conn = pg_support.app_connect()  # the non-superuser RLS-bound role
@@ -61,3 +61,43 @@ def test_expiry_is_enforced_on_postgres(app_conn) -> None:
         app_conn, req["raw_token"], now=_T0 + timedelta(minutes=16)
     )
     assert "error" in late
+
+
+# --- sessions table (RLS-forced, unlike the pre-auth magic_link_tokens) -----
+
+
+def test_sessions_insert_requires_the_user_context(app_conn) -> None:
+    # sessions is RLS-forced: with NO tenant context the WITH CHECK rejects the
+    # insert — the redeem route sets the context right after token redemption.
+    import psycopg.errors
+
+    app_conn.execute("INSERT INTO users (id, email) VALUES (1, 'a@example.com')")
+    app_conn.commit()
+    try:
+        auth_session.issue_session(app_conn, 1, secret="s", now=_T0)
+        app_conn.commit()
+        raise AssertionError("insert without user context must be rejected")
+    except psycopg.errors.Error:
+        app_conn.rollback()
+    app_conn.set_user_context(1)
+    cookie = auth_session.issue_session(app_conn, 1, secret="s", now=_T0)
+    app_conn.commit()
+    assert cookie
+
+
+def test_sessions_are_tenant_scoped_under_rls(app_conn) -> None:
+    app_conn.execute("INSERT INTO users (id, email) VALUES (1, 'a@example.com')")
+    app_conn.execute("INSERT INTO users (id, email) VALUES (2, 'b@example.com')")
+    app_conn.commit()
+    app_conn.set_user_context(2)
+    bob_sid = auth_session.read_session(
+        auth_session.issue_session(app_conn, 2, secret="s", now=_T0), secret="s", now=_T0
+    )["sid"]
+    app_conn.commit()
+
+    # user 1's context cannot see or revoke user 2's session row
+    app_conn.set_user_context(1)
+    assert auth_session.get_session(app_conn, bob_sid) is None
+    assert auth_session.revoke_session(app_conn, 1, bob_sid, now=_T0) is False
+    app_conn.set_user_context(2)
+    assert auth_session.get_session(app_conn, bob_sid) is not None

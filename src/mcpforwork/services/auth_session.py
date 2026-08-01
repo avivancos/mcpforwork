@@ -1,9 +1,10 @@
 """Magic-link + session auth core (pure, dependency-light).
 
-The primitives an account layer needs, with NO HTTP and NO email: the FastAPI
-`entrypoints/api/` layer and magic-link delivery are deferred (S6.x). Both the
-clock (`now`) and the signing `secret` are injected — the module holds no global
-state, so expiry, single-use, and tamper are all deterministic under test.
+The primitives the account layer needs, with NO HTTP and NO email of its own:
+the Starlette `entrypoints/api/` layer wires these into routes, and the Mailer
+port delivers the link. Both the clock (`now`) and the signing `secret` are
+injected — the module holds no global state, so expiry, single-use, and tamper
+are all deterministic under test.
 
 Security shape:
 - The raw magic-link token (`secrets.token_urlsafe`) is returned to the caller
@@ -100,18 +101,37 @@ def redeem_magic_link(uow: UnitOfWork, raw_token: str, *, now: datetime) -> dict
 
 
 def issue_session(
-    user_id: int, *, secret: str, now: datetime, max_age_s: int = _DEFAULT_MAX_AGE_S
+    uow: UnitOfWork,
+    user_id: int,
+    *,
+    secret: str,
+    now: datetime,
+    max_age_s: int = _DEFAULT_MAX_AGE_S,
+    user_agent: str = "",
 ) -> str:
-    """Sign a session cookie carrying `user_id` and its ABSOLUTE expiry
-    (`now + max_age_s`). The lifetime is fixed at issue time — a reader cannot
-    widen it — which closes the fail-open gap of a reader-supplied max age."""
+    """Persist a session row and sign a cookie carrying `user_id`, the session
+    id (`sid`), and its ABSOLUTE expiry (`now + max_age_s`). The lifetime is
+    fixed at issue time — a reader cannot widen it — and the `sid` lets the
+    API kill the session server-side (revocation, account deletion). Caller
+    commits. On Postgres the caller MUST have set the user context first
+    (sessions is RLS-forced)."""
+    # created_at/last_seen are written explicitly (not via column defaults) so
+    # every write on SQLite uses the same ISO format — the strftime default's
+    # `...Z` suffix would misorder against isoformat's `...+00:00` in the
+    # lexicographic ORDER BY — and so the injected clock stays the only clock.
+    sid = uow.insert(
+        "INSERT INTO sessions (user_id, user_agent, created_at, last_seen) VALUES (?, ?, ?, ?)",
+        (user_id, user_agent or None, now.isoformat(), now.isoformat()),
+    )
     serializer = URLSafeSerializer(secret, salt=_SESSION_SALT)
-    return serializer.dumps({"uid": user_id, "exp": _epoch(now) + max_age_s})
+    return serializer.dumps({"uid": user_id, "sid": sid, "exp": _epoch(now) + max_age_s})
 
 
-def read_session(value: str, *, secret: str, now: datetime) -> int | None:
-    """Return the signed-in user_id, or None if the cookie is tampered, signed
-    with a different secret, malformed, or at/past its embedded expiry."""
+def read_session(value: str, *, secret: str, now: datetime) -> dict[str, int | None] | None:
+    """Decode a session cookie to {"uid", "sid"}, or None if the cookie is
+    tampered, signed with a different secret, malformed, or at/past its
+    embedded expiry. `sid` is None for pre-session-store cookies — callers
+    must treat those as logged out (force re-login)."""
     if not isinstance(value, str) or not value:
         return None
     serializer = URLSafeSerializer(secret, salt=_SESSION_SALT)
@@ -127,4 +147,38 @@ def read_session(value: str, *, secret: str, now: datetime) -> int | None:
         return None
     if _epoch(now) >= exp:  # at or past expiry -> rejected (fail-closed)
         return None
-    return uid
+    sid = data.get("sid")
+    return {"uid": uid, "sid": sid if type(sid) is int else None}
+
+
+def get_session(uow: UnitOfWork, session_id: int) -> Any:
+    """One session row by id (RLS scopes it to the caller's tenant on PG)."""
+    return uow.fetchone("SELECT * FROM sessions WHERE id = ?", (session_id,))
+
+
+def touch_session(uow: UnitOfWork, session_id: int, *, now: datetime) -> None:
+    """Bump last_seen — the sessions page's liveness signal. No-op on a
+    revoked session (a dead session never comes back)."""
+    uow.execute(
+        "UPDATE sessions SET last_seen = ? WHERE id = ? AND revoked_at IS NULL",
+        (now.isoformat(), session_id),
+    )
+
+
+def list_sessions(uow: UnitOfWork, user_id: int) -> list[Any]:
+    """The user's active (non-revoked) sessions, most recently seen first."""
+    return uow.fetchall(
+        "SELECT * FROM sessions WHERE user_id = ? AND revoked_at IS NULL"
+        " ORDER BY last_seen DESC, id DESC",
+        (user_id,),
+    )
+
+
+def revoke_session(uow: UnitOfWork, user_id: int, session_id: int, *, now: datetime) -> bool:
+    """Revoke one of the user's own sessions. Returns False when the session
+    is unknown, foreign, or already revoked (idempotent, indistinguishable)."""
+    cursor = uow.execute(
+        "UPDATE sessions SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
+        (now.isoformat(), session_id, user_id),
+    )
+    return cursor.rowcount > 0

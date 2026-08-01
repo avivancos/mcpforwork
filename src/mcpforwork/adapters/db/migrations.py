@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -233,6 +233,21 @@ CREATE TABLE magic_link_tokens (
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 """,
+    # sessions: the dashboard session store (S6.6c). Unlike magic_link_tokens
+    # this IS a per-user RLS table on Postgres — every access happens with the
+    # tenant context set (the API sets it from the signed cookie before the
+    # session lookup). revoked_at NULL = active.
+    9: """
+CREATE TABLE sessions (
+  id         INTEGER PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  user_agent TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  last_seen  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  revoked_at TEXT
+);
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+""",
 }
 
 # Migrations whose script recreates a table that FK children reference; these
@@ -250,6 +265,7 @@ _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "006_applications.sql": 6,
     "007_playbook_reports.sql": 7,
     "008_magic_link_tokens.sql": 8,
+    "009_sessions.sql": 9,
 }
 
 

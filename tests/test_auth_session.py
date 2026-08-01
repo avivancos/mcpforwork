@@ -118,34 +118,66 @@ def test_redeem_is_single_use_across_separate_connections(uow: SqlUnitOfWork, tm
 # --- signed sessions -------------------------------------------------------
 
 
-def test_session_round_trips_the_user_id() -> None:
-    cookie = auth_session.issue_session(42, secret=_SECRET, now=_T0)
-    assert auth_session.read_session(cookie, secret=_SECRET, now=_T0 + timedelta(days=1)) == 42
+def _make_user(uow: SqlUnitOfWork, user_id: int = 42) -> int:
+    uow.execute("INSERT INTO users (id, email) VALUES (?, ?)", (user_id, f"u{user_id}@example.com"))
+    uow.commit()
+    return user_id
 
 
-def test_session_rejects_tamper_wrong_secret_and_garbage() -> None:
-    cookie = auth_session.issue_session(42, secret=_SECRET, now=_T0)
+def test_session_round_trips_the_user_id_and_session_id(uow: SqlUnitOfWork) -> None:
+    uid = _make_user(uow)
+    cookie = auth_session.issue_session(uow, uid, secret=_SECRET, now=_T0)
+    uow.commit()
+    data = auth_session.read_session(cookie, secret=_SECRET, now=_T0 + timedelta(days=1))
+    assert data is not None
+    assert data["uid"] == uid
+    assert isinstance(data["sid"], int)  # the session-store row id
+
+
+def test_session_rejects_tamper_wrong_secret_and_garbage(uow: SqlUnitOfWork) -> None:
+    cookie = auth_session.issue_session(uow, _make_user(uow), secret=_SECRET, now=_T0)
     assert auth_session.read_session(cookie + "x", secret=_SECRET, now=_T0) is None
     assert auth_session.read_session(cookie, secret="a-different-secret", now=_T0) is None
     assert auth_session.read_session("garbage", secret=_SECRET, now=_T0) is None
     assert auth_session.read_session("", secret=_SECRET, now=_T0) is None
 
 
-def test_session_expires_past_max_age() -> None:
+def test_session_expires_past_max_age(uow: SqlUnitOfWork) -> None:
     # Lifetime is fixed at ISSUE time (embedded exp) — the reader can't widen it.
-    cookie = auth_session.issue_session(42, secret=_SECRET, now=_T0, max_age_s=3600)
-    assert auth_session.read_session(cookie, secret=_SECRET, now=_T0 + timedelta(minutes=30)) == 42
+    cookie = auth_session.issue_session(
+        uow, _make_user(uow), secret=_SECRET, now=_T0, max_age_s=3600
+    )
+    assert (
+        auth_session.read_session(cookie, secret=_SECRET, now=_T0 + timedelta(minutes=30))["uid"]
+        == 42
+    )
     assert auth_session.read_session(cookie, secret=_SECRET, now=_T0 + timedelta(hours=2)) is None
 
 
-def test_session_is_rejected_at_the_exact_expiry_instant() -> None:
+def test_session_is_rejected_at_the_exact_expiry_instant(uow: SqlUnitOfWork) -> None:
     # Fail-closed at the boundary: now == exp must be rejected (guards the
     # >=-vs-> off-by-one the mutant probe exposed).
-    cookie = auth_session.issue_session(7, secret=_SECRET, now=_T0, max_age_s=3600)
-    assert auth_session.read_session(cookie, secret=_SECRET, now=_T0 + timedelta(seconds=3599)) == 7
+    cookie = auth_session.issue_session(
+        uow, _make_user(uow, 7), secret=_SECRET, now=_T0, max_age_s=3600
+    )
+    assert (
+        auth_session.read_session(cookie, secret=_SECRET, now=_T0 + timedelta(seconds=3599))["uid"]
+        == 7
+    )
     assert (
         auth_session.read_session(cookie, secret=_SECRET, now=_T0 + timedelta(seconds=3600)) is None
     )
+
+
+def test_legacy_cookie_without_a_session_id_decodes_with_sid_none(uow: SqlUnitOfWork) -> None:
+    # Pre-session-store cookies (uid+exp only) still decode — the API layer
+    # treats sid=None as logged out (force re-login).
+    from itsdangerous import URLSafeSerializer
+
+    s = URLSafeSerializer(_SECRET, salt="mcpforwork.session.v1")
+    exp = int((_T0 + timedelta(hours=2)).timestamp())
+    data = auth_session.read_session(s.dumps({"uid": 42, "exp": exp}), secret=_SECRET, now=_T0)
+    assert data == {"uid": 42, "sid": None}
 
 
 def test_read_session_rejects_a_validly_signed_but_wrong_shaped_payload() -> None:
@@ -177,3 +209,8 @@ def test_read_session_rejects_a_validly_signed_but_wrong_shaped_payload() -> Non
 def test_migration_v8_creates_the_magic_link_table(uow: SqlUnitOfWork) -> None:
     assert SCHEMA_VERSION >= 8
     assert uow.fetchone("SELECT COUNT(*) AS n FROM magic_link_tokens")["n"] == 0
+
+
+def test_migration_v9_creates_the_sessions_table(uow: SqlUnitOfWork) -> None:
+    assert SCHEMA_VERSION >= 9
+    assert uow.fetchone("SELECT COUNT(*) AS n FROM sessions")["n"] == 0
