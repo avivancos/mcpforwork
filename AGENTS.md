@@ -48,7 +48,7 @@ architecture drift fails the build, not a review comment. Deliberately
 skipped ceremony (do NOT introduce): interface-for-every-class, entity↔DTO
 mapping layers, DI frameworks, ORM/repository-per-aggregate, microservices.
 
-## 3. Anti-over-engineering charter (binding; simplicity-reviewer P0)
+## 3. Anti-over-engineering charter (binding; enforced by the review gate)
 
 - No abstraction before the **second concrete use** (rule of two). No
   interface with a single implementation — `typing.Protocol` only at the named
@@ -58,7 +58,7 @@ mapping layers, DI frameworks, ORM/repository-per-aggregate, microservices.
 - No speculative features; no config option without a real user needing it
   (YAGNI). MVP biases stand: print-CSS PDF, single $5 plan, magic-link only.
 - New layer / framework / architectural pattern not named in §Architecture
-  spec → simplicity-reviewer P0-block; requires an ADR in `backlog/decisions/`
+  spec → P0-block at the review gate; requires an ADR in `backlog/decisions/`
   to override.
 - Prefer deleting code over configuring it. Every sprint ends with a
   simplifier pass over the sprint diff.
@@ -91,19 +91,24 @@ changes); at most one card in progress per agent; the card's folder IS its
 state; sprint-style names `S<sprint>.<n>_slug.md`; rolling-wave carding (only
 current + next sprint in `pending/`).
 
-## 6. Final-review gate (4 reviewers)
+## 6. Review gate (single fused reviewer, on-demand extras)
 
-A card may move to `done/` only after the four reviewer subagents in
-`.claude/agents/` — **test-auditor, code-reviewer, simplicity-reviewer,
-security-reviewer** — each return PASS on the card's diff, no P0/P1 finding
-remains, and every P2/P3 finding has a disposition (fixed, follow-up card, or
-written rejection). A documentation reviewer is on-demand, not a gate.
+A card may move to `done/` only after the fused reviewer subagent
+[.claude/agents/test-code-reviewer.md](.claude/agents/test-code-reviewer.md)
+(test audit + code review + regression audit, zero-mocks P0, `model: inherit`)
+returns PASS on the card's diff, no P0/P1 finding remains, and every P2/P3
+finding has a disposition (fixed, follow-up card, or written rejection).
 
-- Reviewers run in parallel, read-only, and do not coordinate before their
-  first reports.
-- After any security-sensitive fix, security-reviewer reruns.
-- If subagents cannot be spawned, perform four separate, clearly labeled
-  review passes with the same contracts and disclose the degraded mode.
+The regression audit is part of the gate: the reviewer runs the FULL suite
+(not just targeted tests) plus the structural gates (lint-imports, ruff, CI
+consent grep, web no-LLM-deps guard) and fails the card if the change weakens
+or breaks any previous contract, test, gate, or process.
+
+- Simplicity and security reviews are ON-DEMAND: the user or the agent may
+  request them explicitly (e.g. §9 P0 surfaces); they are not a per-card gate.
+  See [ADR 0007](backlog/decisions/0007_single_reviewer_gate.md).
+- If the subagent cannot be spawned, perform one clearly labeled review pass
+  with the same contract and disclose the degraded mode.
 
 **Closure semantics:** `done/` = implemented + gate passed · `testing/` =
 verification gates run (full suite + real smoke test, evidence recorded) ·
@@ -134,6 +139,6 @@ uv run lint-imports                      # architecture boundary contracts
 Connector OAuth (2.1 + PKCE + dynamic client registration), magic-link/session
 auth, RLS/tenant isolation (user context set before any query; fail-closed),
 Stripe webhook signature verification, the consent gate, autopilot caps +
-`auto_apply_safe` allowlist, and the zero-server-side-LLM invariant. Any
-change touching these reruns security-reviewer. Details:
-[.claude/agents/security-reviewer.md](.claude/agents/security-reviewer.md).
+`auto_apply_safe` allowlist, and the zero-server-side-LLM invariant. Any change
+touching these warrants an explicit on-demand security review pass (ADR 0007) —
+request it before closing the card.

@@ -25,7 +25,7 @@ schemas, validations, edge cases, exact expected behavior. Include examples.>
 - [ ] <verifiable acceptance criterion>
 - [ ] <verifiable acceptance criterion>
 - [ ] Targeted tests green via `uv run pytest <paths>`
-- [ ] Final-review gate: all four reviewers PASS
+- [ ] Fused review gate: test-code-reviewer PASS (incl. regression audit)
 - [ ] Post-task audit done (visual for UI / smoke for tool/API/CLI)
 
 ## Improvements noted

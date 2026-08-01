@@ -25,7 +25,7 @@ the backlog".
 ```
 pending/             # not started
 in_progress/         # active — at most ONE per agent at a time
-done/                # implemented + final-review gate passed, NOT yet fully verified
+done/                # implemented + fused review gate passed, NOT yet fully verified
 need_human_testing/  # implemented, verification blocked on the human (fork of done/)
 testing/             # verified by the agent (full suite + smoke evidence)
 production/          # deployed
@@ -71,11 +71,12 @@ A card may move to `done/` only when **all** hold:
 1. **Targeted tests green** via `uv run pytest <paths>` (the tests for the
    touched module/feature; the full suite is a pre-push gate, not a per-task
    one).
-2. **Final-review gate passed:** all four reviewers in `.claude/agents/`
-   (test-auditor, code-reviewer, simplicity-reviewer, security-reviewer)
-   returned PASS on this card's diff; no P0/P1 open; every P2/P3 dispositioned
-   (fixed, follow-up card, or written rejection). See `AGENTS.md §Final-review
-   gate`.
+2. **Fused review gate passed:** the fused reviewer
+   (`.claude/agents/test-code-reviewer.md`) returned PASS on this card's diff —
+   including the regression audit (full suite + structural gates green, no
+   previous contract/test/gate weakened); no P0/P1 open; every P2/P3
+   dispositioned (fixed, follow-up card, or written rejection). See
+   `AGENTS.md §6` and ADR 0007. Simplicity/security reviews are on-demand.
 3. **Post-task audit:** navigable UI → visual audit; no UI → smoke-test the
    touched tool/endpoint/CLI (status + schema + sane latency).
 4. **Improvements noted** → recorded in the card's `## Improvements noted`
@@ -147,7 +148,7 @@ This is what makes the task verifiable.>
 ## Definition of Done
 - [ ] <verifiable acceptance criterion>
 - [ ] Targeted tests green via `uv run pytest <paths>`
-- [ ] Final-review gate: all four reviewers PASS
+- [ ] Fused review gate: test-code-reviewer PASS (incl. regression audit)
 - [ ] Post-task audit done (visual for UI / smoke for tool/API/CLI)
 
 ## Improvements noted
