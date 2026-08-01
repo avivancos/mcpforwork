@@ -24,7 +24,7 @@ from mcpforwork import config
 from mcpforwork.adapters.db import connect
 from mcpforwork.adapters.mailer import ConsoleMailer
 from mcpforwork.ports.mailer import Mailer
-from mcpforwork.services import auth_session, privacy, profiles
+from mcpforwork.services import auth_session, pipeline, privacy, profiles
 
 _SESSION_COOKIE = "mcpforwork_session"
 _SESSION_MAX_AGE_S = 14 * 24 * 3600  # 14 days
@@ -143,6 +143,49 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
             uow.close()
         return _JSON(profile)  # null when the user has no profile yet
 
+    async def list_pipeline_route(request: Request) -> Response:
+        user_id = _current_user(request)
+        if user_id is None:
+            return _unauthorized()
+        uow = connect(config.db_url())
+        try:
+            uow.set_user_context(user_id)
+            items = pipeline.list_pipeline(uow, user_id)
+        finally:
+            uow.close()
+        return _JSON(items)
+
+    async def pipeline_stats_route(request: Request) -> Response:
+        user_id = _current_user(request)
+        if user_id is None:
+            return _unauthorized()
+        uow = connect(config.db_url())
+        try:
+            uow.set_user_context(user_id)
+            stats = pipeline.pipeline_stats(uow, user_id)
+        finally:
+            uow.close()
+        return _JSON(stats)
+
+    async def get_match_route(request: Request) -> Response:
+        user_id = _current_user(request)
+        if user_id is None:
+            return _unauthorized()
+        try:
+            finding_id = int(request.path_params["id"])
+        except (KeyError, ValueError):
+            return _JSON({"error": "not found"}, status_code=404)
+        uow = connect(config.db_url())
+        try:
+            uow.set_user_context(user_id)
+            detail = pipeline.get_match_detail(uow, user_id, finding_id)
+        finally:
+            uow.close()
+        if detail is None:
+            # 404 → the web's getOrNull maps it to null (foreign ids included).
+            return _JSON({"error": "not found"}, status_code=404)
+        return _JSON(detail)
+
     async def account_export(request: Request) -> Response:
         user_id = _current_user(request)
         if user_id is None:
@@ -176,6 +219,9 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         Route("/v1/auth/magic-link", request_magic_link, methods=["POST"]),
         Route("/v1/auth/redeem", redeem, methods=["GET"]),
         Route("/v1/profile", get_profile, methods=["GET"]),
+        Route("/v1/pipeline", list_pipeline_route, methods=["GET"]),
+        Route("/v1/pipeline/stats", pipeline_stats_route, methods=["GET"]),
+        Route("/v1/matches/{id}", get_match_route, methods=["GET"]),
         Route("/v1/account/export", account_export, methods=["POST"]),
         Route("/v1/account/delete", account_delete, methods=["POST"]),
     ]

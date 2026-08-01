@@ -79,6 +79,7 @@ _NEXT_ACTIONS: dict[str, str] = {
     "get_asset_file": "Upload this file where the form asks for it.",
     "report_playbook_result": "Thanks — this feeds the next pack version. Back to /review.",
     "list_matches": "Run /review with the human: approve_match or discard_match each.",
+    "pipeline_stats": "Share the numbers with the user; then /hunt or /review.",
     "approve_match": "Run /apply: get_generation_brief, draft, then start_application.",
     "discard_match": "Back to list_matches for the next one.",
     "get_match": "Call get_generation_brief(finding_id, asset_type) to draft materials.",

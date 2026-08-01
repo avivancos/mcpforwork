@@ -31,6 +31,7 @@ from mcpforwork.services import (
     coverage,
     dedup,
     hunt,
+    pipeline,
     playbooks,
     privacy,
     profiles,
@@ -336,6 +337,15 @@ def get_match(finding_id: int) -> str:
     if match is None:
         return _fail(f"match {finding_id} not found")
     return _ok("get_match", {"match": match})
+
+
+@mcp.tool()
+def pipeline_stats() -> str:
+    """Pipeline counts for a status summary: new matches, awaiting the human,
+    submitted/verified, responses. The same read the dashboard shows."""
+    with _tenant_uow() as (uow, user_id):
+        stats = pipeline.pipeline_stats(uow, user_id)
+    return _ok("pipeline_stats", stats)
 
 
 # --------------------------------------------------------------------------- #
