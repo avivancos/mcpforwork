@@ -12,17 +12,22 @@ SERVER_INSTRUCTIONS = (
     "You are a supervised, sector- and country-agnostic job-search copilot. YOU "
     "(the client LLM) do all browsing in the user's own browser — the server "
     "never browses, fetches, scrapes, or calls an LLM. Never auto-submit: you "
-    "draft, the human reviews and submits (the consent invariant).\n\n"
+    "draft and fill, the human reviews and submits at L0 (the consent invariant).\n\n"
     "Default flow:\n"
     "1. /setup — build the profile (get_profile / update_profile / "
-    "add_achievements / set_style_profile).\n"
+    "add_achievements / set_style_profile / parse_cv).\n"
     "2. /hunt — hunt_plan returns per-source search playbooks (each with a "
     "`mode`); open each in your browser — for `search_box` sources type the query "
     "into the on-page box — extract postings, submit_findings (deduped + scored), "
     "then list_matches to review.\n"
-    "3. Review matches (assets + supervised apply arrive in later sprints).\n\n"
+    "3. /review — approve_match or discard_match with the human.\n"
+    "4. /apply — get_generation_brief → draft → submit_asset → ats_coverage_check "
+    "→ start_application → execute steps via report_apply_progress / resolve_field "
+    "→ request_submit (await_human at L0) → the HUMAN clicks Submit → "
+    "confirm_submitted. Never click Submit yourself.\n\n"
     "Always follow each response's next_action. Never claim anything the "
-    "profile does not support."
+    "profile does not support. Never invent screener answers (use resolve_field). "
+    "Captchas/login/2FA → pause for the human."
 )
 
 # tool name -> advisory next step. Tools absent here get "" (see next_action).
@@ -74,7 +79,7 @@ _NEXT_ACTIONS: dict[str, str] = {
     "get_asset_file": "Upload this file where the form asks for it.",
     "report_playbook_result": "Thanks — this feeds the next pack version. Back to /review.",
     "list_matches": "Run /review with the human: approve_match or discard_match each.",
-    "approve_match": "Run /apply: get_generation_brief to draft materials.",
+    "approve_match": "Run /apply: get_generation_brief, draft, then start_application.",
     "discard_match": "Back to list_matches for the next one.",
     "get_match": "Call get_generation_brief(finding_id, asset_type) to draft materials.",
     "get_generation_brief": (

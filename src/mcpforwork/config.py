@@ -28,6 +28,9 @@ def db_url() -> str:
 
 
 def local_user_id() -> int:
-    """The tenant id for the self-host stdio server. Hosted auth (Bearer /
-    magic-link) resolves identity differently and arrives in a later sprint."""
+    """The tenant id for the self-host stdio MCP server.
+
+    The hosted/parity API resolves identity from the magic-link session cookie
+    instead; this helper is only for the local MCP process.
+    """
     return int(os.environ.get("MCPFORWORK_USER_ID", "1"))

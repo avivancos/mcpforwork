@@ -32,6 +32,33 @@ def test_server_instructions_state_the_consent_and_zero_llm_invariants() -> None
     assert "never fetches" in text or "never browses" in text or "server never" in text
 
 
+def test_server_instructions_describe_the_shipped_apply_loop() -> None:
+    # S6.5: guidance must not claim assets/apply "arrive in later sprints".
+    text = guidance.SERVER_INSTRUCTIONS
+    lowered = text.lower()
+    assert "later sprint" not in lowered
+    assert "later version" not in lowered
+    assert "start_application" in text
+    assert "request_submit" in text
+    assert "confirm_submitted" in text
+    assert "/apply" in text or "/review" in text
+
+
+def test_apply_prompt_covers_the_full_orchestration_loop() -> None:
+    prompt = server.apply_session()
+    lowered = prompt.lower()
+    assert "later sprint" not in lowered
+    assert "later version" not in lowered
+    assert "get_generation_brief" in prompt
+    assert "ats_coverage_check" in prompt
+    assert "start_application" in prompt
+    assert "report_apply_progress" in prompt
+    assert "request_submit" in prompt
+    assert "confirm_submitted" in prompt
+    assert "human" in lowered
+    assert "clicks submit" in lowered or "never click submit" in lowered
+
+
 def test_hunt_guidance_tells_the_client_to_use_the_search_box_when_mode_says_so() -> None:
     # S2.6: surfacing `mode` is inert unless the client is instructed to branch on
     # it — the hunt breadcrumbs and SERVER_INSTRUCTIONS must mention search_box.

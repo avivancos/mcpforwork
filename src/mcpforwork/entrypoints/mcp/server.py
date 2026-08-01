@@ -606,25 +606,34 @@ def review_session() -> str:
         "score, why it scored - the breakdown).\n"
         "2. For each, the HUMAN decides: approve_match(id) or discard_match(id, "
         "reason). Never approve or discard on your own judgment.\n"
-        "3. For approved matches, offer /apply (draft materials)."
+        "3. For approved matches, offer /apply (draft, fill, supervised submit)."
     )
 
 
 @mcp.prompt(name="apply")
 def apply_session() -> str:
-    """The /apply flow (S3 scope): brief -> honest draft -> coverage -> human sends."""
+    """The /apply flow: brief → honest draft → coverage → browser fill → consent."""
     return (
-        "Draft application materials for an approved match:\n"
-        "1. get_generation_brief(finding_id, asset_type) - cv or cover_letter.\n"
+        "Apply to an approved match end-to-end:\n"
+        "1. get_generation_brief(finding_id, asset_type) — cv or cover_letter.\n"
         "2. Draft honoring honesty_rules: ONLY claims the facts_inventory proves; "
         "acknowledge gaps; match the posting's language; use the style sample.\n"
         "3. submit_asset(finding_id, asset_type, content), then "
         "ats_coverage_check(finding_id, asset_id).\n"
-        "4. Add missing_but_have items truthfully; NEVER stuff genuine_gaps - "
+        "4. Add missing_but_have items truthfully; NEVER stuff genuine_gaps — "
         "acknowledge them. Iterate once if coverage is weak.\n"
-        "5. Show the final draft to the human. THE HUMAN sends/submits it - never "
-        "auto-submit anything (browser apply orchestration arrives in a later "
-        "version; record_application(url, channel) after the human confirms)."
+        "5. Show the final draft to the human, then "
+        "start_application(finding_id).\n"
+        "6. Execute each step in the user's browser; report with "
+        "report_apply_progress. Unknown screeners → resolve_field (ask the human "
+        "on ask_user; save_form_answer). Obstacles (captcha/login/2FA) → pause "
+        "for the human, then resume. Upload via get_asset_file when asked.\n"
+        "7. When the form is filled, call request_submit(application_id, summary). "
+        "At L0 the decision is await_human — show the filled form; THE HUMAN "
+        "clicks Submit. Never click Submit yourself.\n"
+        "8. After the human confirms the employer accepted it, "
+        "confirm_submitted(application_id, evidence). Optionally record_outcome "
+        "later; report_playbook_result on selector drift."
     )
 
 
