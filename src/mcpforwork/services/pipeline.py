@@ -109,41 +109,80 @@ def list_pipeline(uow: UnitOfWork, user_id: int, limit: int = 200) -> list[dict[
     return [_item(f, app) for f, app in _pairs(uow, user_id, limit)]
 
 
-def _as_dt(value: Any) -> datetime:
-    """SQLite stores ISO text; Postgres returns datetimes. Normalize to an
-    aware UTC datetime for comparison."""
-    if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=UTC)
-    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+def _iso_ms_z(value: datetime) -> str:
+    """Millisecond ISO-8601 with Z — the exact shape SQLite's strftime column
+    defaults write (`%Y-%m-%dT%H:%M:%fZ` → seconds + `.sssZ`), so the
+    lexicographic text comparison on SQLite IS the chronological one.
+    Postgres coerces the same string to TIMESTAMP natively (verified against
+    psycopg)."""
+    value = value.astimezone(UTC)
+    return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
+
+
+# SQL mirror of derive_stage — the pure function stays the source of truth;
+# test_stats_sql_stage_case_agrees_with_derive_stage_on_a_seeded_matrix proves
+# both vocabularies agree on the full status × state × outcome matrix.
+_STAGE_CASE_SQL = """\
+CASE
+  WHEN f.status = 'discarded' THEN 'discarded'
+  WHEN a.outcome IS NOT NULL AND a.outcome <> '' THEN CASE a.outcome
+    WHEN 'no_reply' THEN 'no_response'
+    WHEN 'rejected' THEN 'rejected'
+    WHEN 'interview' THEN 'interview'
+    WHEN 'offer' THEN 'offer'
+    WHEN 'hired' THEN 'offer'
+    ELSE 'submitted'
+  END
+  WHEN a.state IN ('awaiting_human', 'submit_requested') THEN 'awaiting_you'
+  WHEN a.state IN ('draft', 'filling') THEN 'filling'
+  WHEN a.state = 'submitted' THEN 'submitted'
+  WHEN a.state = 'verified' THEN 'verified'
+  ELSE 'new_match'
+END"""
+
+_STAGE_COUNTS_SQL = f"""
+SELECT {_STAGE_CASE_SQL} AS stage,
+       COUNT(*) AS n,
+       SUM(CASE WHEN f.first_seen >= ? THEN 1 ELSE 0 END) AS recent
+FROM explore_findings f
+LEFT JOIN (
+  SELECT finding_id, MAX(id) AS mid FROM applications WHERE user_id = ? GROUP BY finding_id
+) latest ON latest.finding_id = f.id
+LEFT JOIN applications a ON a.id = latest.mid
+WHERE f.user_id = ?
+GROUP BY stage
+"""
+
+
+def _stage_counts(
+    uow: UnitOfWork, user_id: int, week_start: datetime
+) -> tuple[dict[str, int], int]:
+    """Per-stage counts over ALL the user's findings, aggregated in SQL (no
+    row window), plus how many new_match rows were first seen since
+    `week_start`."""
+    rows = uow.fetchall(_STAGE_COUNTS_SQL, (_iso_ms_z(week_start), user_id, user_id))
+    counts = {row["stage"]: int(row["n"]) for row in rows}
+    recent_new = sum(int(row["recent"]) for row in rows if row["stage"] == "new_match")
+    return counts, recent_new
 
 
 def pipeline_stats(uow: UnitOfWork, user_id: int, *, now: datetime | None = None) -> dict[str, Any]:
     """PipelineStats — counts over the derived stages. `now` is injectable."""
     now = now or datetime.now(UTC)
-    pairs = _pairs(uow, user_id, limit=1000)
-    stages = [derive_stage(f["status"], app) for f, app in pairs]
-    week_start = now - timedelta(days=7)
-    new_this_week = sum(
-        1
-        for (f, _), stage in zip(pairs, stages, strict=True)
-        if stage == "new_match" and _as_dt(f["first_seen"]) >= week_start
-    )
-    submitted = [s for s in stages if s in _SUBMITTED_STAGES]
+    counts, found_this_week = _stage_counts(uow, user_id, now - timedelta(days=7))
+
+    def n(stage: str) -> int:
+        return counts.get(stage, 0)
+
+    submitted = sum(n(s) for s in _SUBMITTED_STAGES)
     return {
-        "newMatches": {
-            "count": stages.count("new_match"),
-            "foundThisWeek": new_this_week,
-        },
-        "needsYou": {"count": stages.count("awaiting_you")},
-        "submitted": {
-            "count": len(submitted),
-            "verified": stages.count("verified"),
-        },
+        "newMatches": {"count": n("new_match"), "foundThisWeek": found_this_week},
+        "needsYou": {"count": n("awaiting_you")},
+        "submitted": {"count": submitted, "verified": n("verified")},
         "responses": {
-            "count": sum(1 for s in stages if s in _RESPONSE_STAGES),
-            "of": len(submitted),
-            "interviews": sum(1 for s in stages if s in _INTERVIEW_STAGES),
+            "count": sum(n(s) for s in _RESPONSE_STAGES),
+            "of": submitted,
+            "interviews": sum(n(s) for s in _INTERVIEW_STAGES),
         },
     }
 
@@ -163,11 +202,19 @@ def get_match_detail(uow: UnitOfWork, user_id: int, finding_id: int) -> dict[str
         " WHERE user_id = ? AND finding_id = ? ORDER BY id DESC",
         (user_id, finding_id),
     )
-    # audit_log is not RLS-forced — this explicit user_id filter is the wall.
+    # audit_log is not RLS-forced — the explicit user_id filter is the tenant
+    # wall. The LIKE clauses are a finding-scoped PRE-FILTER: a superset keyed
+    # on the exact `"key": value` shape json.dumps writes (over-matches like
+    # finding_id 51 vs 5 are rejected by the exact per-row filter below). No
+    # event for this finding is ever crowded out by unrelated audit volume.
+    patterns = [f'%"finding_id": {finding_id}%']
+    if app is not None:
+        patterns.append(f'%"application_id": {app["id"]}%')
+    likes = " OR ".join("detail LIKE ?" for _ in patterns)
     audit_rows = uow.fetchall(
-        "SELECT action, detail, created_at FROM audit_log"
-        " WHERE user_id = ? ORDER BY id DESC LIMIT 200",
-        (user_id,),
+        f"SELECT action, detail, created_at FROM audit_log"
+        f" WHERE user_id = ? AND ({likes}) ORDER BY id DESC",
+        (user_id, *patterns),
     )
 
     breakdown = finding.get("score_breakdown") or {}

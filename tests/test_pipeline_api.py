@@ -8,6 +8,7 @@ keeps tenants apart — that filter is what the live arm proves).
 """
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -321,6 +322,196 @@ def test_pipeline_empty_state_for_a_fresh_user(any_uow):
     assert stats["newMatches"] == {"count": 0, "foundThisWeek": 0}
     assert stats["submitted"] == {"count": 0, "verified": 0}
     assert pipeline.get_match_detail(uow, 1, 1) is None
+
+
+# --------------------------------------------------------------------------- #
+# S6.9 — no silent read windows: stats aggregate in SQL, match-detail audit
+# is finding-scoped (unrelated audit volume can never crowd out its events)
+# --------------------------------------------------------------------------- #
+def _iso_ms_z(value: datetime) -> str:
+    """The exact shape SQLite's strftime column defaults write (ms + Z)."""
+    value = value.astimezone(UTC)
+    return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
+
+
+def test_stats_stay_correct_beyond_the_old_1000_finding_window(any_uow):
+    from mcpforwork.services import pipeline
+
+    uow = any_uow
+    uow.execute("INSERT INTO users (id, email) VALUES (1, 'a@example.com')")
+    # 1001 recent new matches (default first_seen = now) + 2 older than a week.
+    for i in range(1001):
+        uow.execute(
+            "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title)"
+            " VALUES (1, 'weworkremotely', ?, ?, ?)",
+            (f"w{i}", f"https://w.example/{i}", f"Job {i}"),
+        )
+    old = _iso_ms_z(datetime.now(UTC) - timedelta(days=10))
+    for i in range(1001, 1003):
+        uow.execute(
+            "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title,"
+            " first_seen) VALUES (1, 'weworkremotely', ?, ?, ?, ?)",
+            (f"w{i}", f"https://w.example/{i}", f"Job {i}", old),
+        )
+    # One awaiting_you + one verified, ids past the old window's tail.
+    for i, state in ((1003, "awaiting_human"), (1004, "verified")):
+        fid = uow.insert(
+            "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title)"
+            " VALUES (1, 'weworkremotely', ?, ?, ?)",
+            (f"w{i}", f"https://w.example/{i}", f"Job {i}"),
+        )
+        uow.insert(
+            "INSERT INTO applications (user_id, finding_id, state) VALUES (1, ?, ?)",
+            (fid, state),
+        )
+    uow.commit()
+
+    stats = pipeline.pipeline_stats(uow, 1)
+    assert stats["newMatches"] == {"count": 1003, "foundThisWeek": 1001}
+    assert stats["needsYou"] == {"count": 1}
+    assert stats["submitted"] == {"count": 1, "verified": 1}
+    assert stats["responses"] == {"count": 0, "of": 1, "interviews": 0}
+
+
+_FINDING_STATUSES = ["new", "review", "approved", "discarded", "applied_external"]
+_APP_STATES = [
+    None,
+    "draft",
+    "filling",
+    "awaiting_human",
+    "submit_requested",
+    "submitted",
+    "verified",
+    "abandoned",
+]
+_OUTCOMES = [None, "", "no_reply", "rejected", "interview", "offer", "hired", "mystery"]
+
+
+def test_stats_sql_stage_case_agrees_with_derive_stage_on_a_seeded_matrix(any_uow):
+    """The SQL CASE in _stage_counts must mirror the pure derive_stage on the
+    full (finding status × application state × outcome) matrix — drift between
+    the two vocabularies fails here, on both dialects."""
+    from collections import Counter
+
+    from mcpforwork.services import pipeline
+
+    uow = any_uow
+    uow.execute("INSERT INTO users (id, email) VALUES (1, 'a@example.com')")
+    expected: Counter[str] = Counter()
+    i = 0
+    for status in _FINDING_STATUSES:
+        for state in _APP_STATES:
+            for outcome in _OUTCOMES:
+                i += 1
+                fid = uow.insert(
+                    "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url,"
+                    " title, status) VALUES (1, 'weworkremotely', ?, ?, ?, ?)",
+                    (f"m{i}", f"https://m.example/{i}", f"Combo {i}", status),
+                )
+                app = None
+                if state is not None:
+                    uow.insert(
+                        "INSERT INTO applications (user_id, finding_id, state, outcome)"
+                        " VALUES (1, ?, ?, ?)",
+                        (fid, state, outcome),
+                    )
+                    app = {"state": state, "outcome": outcome}
+                expected[pipeline.derive_stage(status, app)] += 1
+    uow.commit()
+
+    week_start = datetime.now(UTC) - timedelta(days=7)
+    counts, recent_new = pipeline._stage_counts(uow, 1, week_start)
+    assert counts == dict(expected)
+    assert recent_new == expected["new_match"]  # everything seeded just now
+
+
+def test_stats_never_count_another_users_findings(any_uow):
+    """Kills the 'drop the tenant predicate' mutant on the stats SQL: user 2's
+    rows must not move user 1's counts, on either dialect."""
+    from mcpforwork.services import pipeline
+
+    uow = any_uow
+    uow.execute("INSERT INTO users (id, email) VALUES (1, 'a@example.com')")
+    uow.execute("INSERT INTO users (id, email) VALUES (2, 'b@example.com')")
+    uow.execute(
+        "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title)"
+        " VALUES (1, 'weworkremotely', 'mine', 'https://a.example/1', 'My Job')"
+    )
+    # Bob: a finding in every stage bucket the stats count, incl. one whose
+    # application would land in the same MAX(id) subquery shape.
+    for i, status in enumerate(("new", "discarded", "approved")):
+        fid = uow.insert(
+            "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title,"
+            " status) VALUES (2, 'weworkremotely', ?, ?, ?, ?)",
+            (f"b{i}", f"https://b.example/{i}", f"Bob Job {i}", status),
+        )
+        uow.insert(
+            "INSERT INTO applications (user_id, finding_id, state) VALUES (2, ?, 'verified')",
+            (fid,),
+        )
+    uow.commit()
+
+    stats = pipeline.pipeline_stats(uow, 1)
+    assert stats["newMatches"] == {"count": 1, "foundThisWeek": 1}
+    assert stats["needsYou"] == {"count": 0}
+    assert stats["submitted"] == {"count": 0, "verified": 0}
+    assert stats["responses"] == {"count": 0, "of": 0, "interviews": 0}
+
+
+def test_stats_use_the_latest_application_per_finding(any_uow):
+    """Kills the MAX(id)→MIN(id) mutant: a re-apply whose newest application is
+    abandoned leaves the match new, even though an older one was submitted."""
+    from mcpforwork.services import pipeline
+
+    uow = any_uow
+    uow.execute("INSERT INTO users (id, email) VALUES (1, 'a@example.com')")
+    fid = uow.insert(
+        "INSERT INTO explore_findings (user_id, source_slug, dedup_hash, url, title)"
+        " VALUES (1, 'weworkremotely', 'h', 'https://a.example/1', 'Job')"
+    )
+    uow.insert(
+        "INSERT INTO applications (user_id, finding_id, state) VALUES (1, ?, 'submitted')",
+        (fid,),
+    )
+    uow.insert(
+        "INSERT INTO applications (user_id, finding_id, state) VALUES (1, ?, 'abandoned')",
+        (fid,),
+    )
+    uow.commit()
+
+    stats = pipeline.pipeline_stats(uow, 1)
+    assert stats["newMatches"]["count"] == 1
+    assert stats["submitted"] == {"count": 0, "verified": 0}
+
+
+def test_match_detail_audit_is_complete_beyond_200_unrelated_rows(any_uow):
+    from mcpforwork.services import pipeline
+
+    uow = any_uow
+    uow.execute("INSERT INTO users (id, email) VALUES (1, 'a@example.com')")
+    hunt.submit_findings(
+        uow, 1, "weworkremotely", [{"url": "https://a.example/1", "title": "Nurse"}]
+    )
+    fid = uow.fetchone("SELECT id FROM explore_findings WHERE user_id = 1")["id"]
+    app_id = uow.insert(
+        "INSERT INTO applications (user_id, finding_id, state) VALUES (1, ?, 'submitted')",
+        (fid,),
+    )
+    audit.record(uow, 1, "approve_match", {"finding_id": fid})
+    audit.record(uow, 1, "submit_asset", {"finding_id": fid, "asset_type": "cv", "version": 1})
+    audit.record(uow, 1, "confirm_submitted", {"application_id": app_id, "evidence": True})
+    # 250 unrelated NEWER rows — the old 200-row window pushed the finding's
+    # own events out of sight. One adversarial row whose finding_id merely
+    # STARTS WITH ours (over-match the pre-filter must not leak through).
+    for i in range(250):
+        audit.record(uow, 1, "save_form_answer", {"field_label": f"q{i}"})
+    audit.record(uow, 1, "approve_match", {"finding_id": int(f"{fid}1")})
+    uow.commit()
+
+    detail = pipeline.get_match_detail(uow, 1, fid)
+    assert detail is not None
+    events = [e["event"].split(" ")[0] for e in detail["audit"]]
+    assert events == ["confirm_submitted", "submit_asset", "approve_match"]
 
 
 # --------------------------------------------------------------------------- #
