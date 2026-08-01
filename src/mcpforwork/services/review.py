@@ -43,3 +43,24 @@ def discard_match(
     )
     audit.record(uow, user_id, "discard_match", {"finding_id": finding_id, "reason": reason})
     return {"ok": True, "finding_id": finding_id, "status": "discarded"}
+
+
+def restore_match(uow: UnitOfWork, user_id: int, finding_id: int) -> dict[str, Any]:
+    """Re-open a discarded match (discarded → new). The dashboard's undo."""
+    match = hunt.get_match(uow, user_id, finding_id)
+    if match is None:
+        return {"error": f"match {finding_id} not found"}
+    if match["status"] != "discarded":
+        return {
+            "error": f"match {finding_id} is '{match['status']}' — only discarded matches restore"
+        }
+    # State predicate in the UPDATE itself (concurrent-safe, like approve).
+    cur = uow.execute(
+        "UPDATE explore_findings SET status = 'new'"
+        " WHERE id = ? AND user_id = ? AND status = 'discarded'",
+        (finding_id, user_id),
+    )
+    if cur.rowcount == 0:
+        return {"error": f"match {finding_id} changed state concurrently — re-check it"}
+    audit.record(uow, user_id, "restore_match", {"finding_id": finding_id})
+    return {"ok": True, "finding_id": finding_id, "status": "new"}

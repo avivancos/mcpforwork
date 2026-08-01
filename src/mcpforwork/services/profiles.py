@@ -239,3 +239,115 @@ def export_for_brief(
         for field in domain.PRIVATE_SALARY_FIELDS:
             facts.pop(field, None)
     return facts
+
+
+# --------------------------------------------------------------------------- #
+# Web dashboard shape (web/src/lib/api/types.ts Profile)
+# --------------------------------------------------------------------------- #
+# Display ↔ enum for employment types (the intake model stores enum values).
+_EMPLOYMENT_DISPLAY = {
+    "full_time": "Full-time",
+    "contract": "Contract",
+    "part_time": "Part-time",
+    "freelance": "Freelance",
+}
+_EMPLOYMENT_FROM_DISPLAY = {v: k for k, v in _EMPLOYMENT_DISPLAY.items()}
+
+_DEFAULT_WEB_PROFILE: dict[str, Any] = {
+    "name": "",
+    "email": "",
+    "headline": "",
+    "targetRole": "",
+    "cities": [],
+    "workRights": "",
+    "salaryFloor": "",
+    "workMode": "onsite",
+    "languages": "",
+    "seniority": "",
+    "employmentType": "",
+    "achievements": [],
+    "styleProfile": None,
+    "tier1Step": 1,
+}
+
+
+def get_web_profile(uow: UnitOfWork, user_id: int) -> dict[str, Any]:
+    """The dashboard's `Profile` shape. A fresh user gets the default shape
+    (tier1Step 1 — onboarding starts); every field is derived from real
+    columns, never fabricated."""
+    prof = get_profile(uow, user_id)
+    if prof is None:
+        return dict(_DEFAULT_WEB_PROFILE)
+    achievements = list_achievements(uow, user_id, prof["id"])
+    style = get_style_profile(uow, user_id, prof["id"])
+    tier1_open = any(g["tier"] == 1 for g in profile_gaps(uow, user_id))
+    rights = ", ".join(prof.get("work_auth_countries") or [])
+    if prof.get("needs_sponsorship"):
+        rights = f"{rights} · needs sponsorship" if rights else "Needs sponsorship"
+    floor = ""
+    if prof.get("min_salary_amount"):
+        floor = (
+            f"{prof.get('min_salary_currency') or ''}{prof['min_salary_amount']:,}"
+            f" / {prof.get('min_salary_period') or 'year'}"
+        )
+    return {
+        "name": prof.get("full_name") or "",
+        "email": prof.get("contact_email") or "",
+        "headline": prof.get("career_narrative") or "",
+        "targetRole": (prof.get("target_titles") or [""])[0],
+        "cities": [prof["city"]] if prof.get("city") else [],
+        "workRights": rights,
+        "salaryFloor": floor,
+        "workMode": (prof.get("work_modes") or ["onsite"])[0],
+        "languages": " · ".join(prof.get("languages") or []),
+        "seniority": prof.get("seniority") or "",
+        "employmentType": _EMPLOYMENT_DISPLAY.get((prof.get("employment_types") or [""])[0], ""),
+        "achievements": [
+            {"id": str(a["id"]), "text": a["metric"], "source": a.get("role") or "Achievement"}
+            for a in achievements
+        ],
+        "styleProfile": "Custom style profile set" if style else None,
+        "tier1Step": 2 if tier1_open else 4,
+    }
+
+
+def update_web_profile(uow: UnitOfWork, user_id: int, patch: Mapping[str, Any]) -> dict[str, Any]:
+    """Map the dashboard's `Partial<Profile>` onto intake columns and apply it
+    (creating the profile on first save). Display-only fields with no intake
+    column — workRights, salaryFloor, tier1Step — are ignored by design: never
+    add schema for a display field."""
+    mapped: dict[str, Any] = {}
+    if isinstance(patch.get("name"), str):
+        mapped["full_name"] = patch["name"]
+    if isinstance(patch.get("email"), str):
+        mapped["contact_email"] = patch["email"]
+    if isinstance(patch.get("headline"), str):
+        mapped["career_narrative"] = patch["headline"]
+    if isinstance(patch.get("targetRole"), str) and patch["targetRole"].strip():
+        mapped["target_titles"] = [patch["targetRole"].strip()]
+    if isinstance(patch.get("seniority"), str) and patch["seniority"]:
+        mapped["seniority"] = patch["seniority"].lower()
+    if isinstance(patch.get("employmentType"), str) and patch["employmentType"]:
+        enum_value = _EMPLOYMENT_FROM_DISPLAY.get(patch["employmentType"])
+        if enum_value is None:
+            return {"error": f"unknown employmentType {patch['employmentType']!r}"}
+        mapped["employment_types"] = [enum_value]
+    if isinstance(patch.get("workMode"), str) and patch["workMode"]:
+        mapped["work_modes"] = [patch["workMode"]]
+    if isinstance(patch.get("languages"), str):
+        mapped["languages"] = [s.strip() for s in patch["languages"].split("·") if s.strip()]
+    if isinstance(patch.get("cities"), list) and patch["cities"]:
+        # The intake model has no target-cities column — keep the first entry
+        # in `city` (collapse documented on the S6.6b card).
+        mapped["city"] = str(patch["cities"][0])
+    if not mapped:
+        return {"ok": True, "changed": []}
+    try:
+        prof = get_profile(uow, user_id)
+        if prof is None:
+            create_profile(uow, user_id, mapped)
+        else:
+            update_profile(uow, user_id, prof["id"], mapped)
+    except domain.ProfileValidationError as exc:
+        return {"error": str(exc)}
+    return {"ok": True, "changed": sorted(mapped)}

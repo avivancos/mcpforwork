@@ -111,7 +111,7 @@ def test_authed_profile_returns_the_users_data(api, env):
     finally:
         seed.close()
     body = client.get("/v1/profile").json()
-    assert body["full_name"] == "Ada Lovelace"
+    assert body["name"] == "Ada Lovelace"  # web Profile shape (S6.6b)
 
 
 def test_account_export_and_delete_are_authed(api):

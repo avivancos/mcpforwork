@@ -10,6 +10,7 @@ server), and set as the RLS context on the connection.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from datetime import UTC, datetime
@@ -24,10 +25,20 @@ from mcpforwork import config
 from mcpforwork.adapters.db import connect
 from mcpforwork.adapters.mailer import ConsoleMailer
 from mcpforwork.ports.mailer import Mailer
-from mcpforwork.services import auth_session, pipeline, privacy, profiles
+from mcpforwork.services import apply as apply_service
+from mcpforwork.services import auth_session, hunt, pipeline, privacy, profiles, review
 
 _SESSION_COOKIE = "mcpforwork_session"
 _SESSION_MAX_AGE_S = 14 * 24 * 3600  # 14 days
+
+# Web outcome vocabulary (types.ts Outcome) → the service vocabulary
+# (services/apply.OUTCOMES).
+_WEB_OUTCOMES = {
+    "no_response": "no_reply",
+    "rejected": "rejected",
+    "interview": "interview",
+    "offer": "offer",
+}
 
 
 def _now() -> datetime:
@@ -138,10 +149,116 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         uow = connect(config.db_url())
         try:
             uow.set_user_context(user_id)
-            profile = profiles.get_profile(uow, user_id)
+            profile = profiles.get_web_profile(uow, user_id)
         finally:
             uow.close()
-        return _JSON(profile)  # null when the user has no profile yet
+        return _JSON(profile)
+
+    async def post_profile(request: Request) -> Response:
+        user_id = _current_user(request)
+        if user_id is None:
+            return _unauthorized()
+        try:
+            body = await request.json()
+        except Exception:
+            return _JSON({"error": "invalid request"}, status_code=400)
+        if not isinstance(body, dict):
+            return _JSON({"error": "invalid request"}, status_code=400)
+        uow = connect(config.db_url())
+        try:
+            uow.set_user_context(user_id)
+            result = profiles.update_web_profile(uow, user_id, body)
+            if "error" in result:
+                return _JSON({"error": result["error"]}, status_code=400)
+            uow.commit()
+        finally:
+            uow.close()
+        return Response(status_code=204)
+
+    def _match_id(request: Request) -> int | None:
+        try:
+            return int(request.path_params["id"])
+        except (KeyError, ValueError):
+            return None
+
+    def _action_response(result: dict[str, Any]) -> Response:
+        if "error" in result:
+            # Unknown and foreign matches are indistinguishable (both 404).
+            status = 404 if "not found" in result["error"] else 400
+            return _JSON({"error": result["error"]}, status_code=status)
+        return Response(status_code=204)
+
+    async def _match_action(request: Request, action: Any) -> Response:
+        user_id = _current_user(request)
+        if user_id is None:
+            return _unauthorized()
+        finding_id = _match_id(request)
+        if finding_id is None:
+            return _JSON({"error": "not found"}, status_code=404)
+        uow = connect(config.db_url())
+        try:
+            uow.set_user_context(user_id)
+            result = action(uow, user_id, finding_id)
+            response = _action_response(result)
+            if response.status_code == 204:
+                uow.commit()
+        finally:
+            uow.close()
+        return response
+
+    async def approve_match_route(request: Request) -> Response:
+        return await _match_action(request, review.approve_match)
+
+    async def discard_match_route(request: Request) -> Response:
+        reason = ""
+        with contextlib.suppress(Exception):
+            body = await request.json()
+            if isinstance(body, dict):
+                reason = str(body.get("reason", ""))
+        return await _match_action(
+            request, lambda u, uid, fid: review.discard_match(u, uid, fid, reason)
+        )
+
+    async def restore_match_route(request: Request) -> Response:
+        return await _match_action(request, review.restore_match)
+
+    async def record_outcome_route(request: Request) -> Response:
+        user_id = _current_user(request)
+        if user_id is None:
+            return _unauthorized()
+        finding_id = _match_id(request)
+        if finding_id is None:
+            return _JSON({"error": "not found"}, status_code=404)
+        try:
+            body = await request.json()
+        except Exception:
+            return _JSON({"error": "invalid request"}, status_code=400)
+        if not isinstance(body, dict):
+            return _JSON({"error": "invalid request"}, status_code=400)
+        outcome = _WEB_OUTCOMES.get(str(body.get("outcome", "")))
+        if outcome is None:
+            return _JSON(
+                {"error": f"outcome must be one of {sorted(_WEB_OUTCOMES)}"}, status_code=400
+            )
+        uow = connect(config.db_url())
+        try:
+            uow.set_user_context(user_id)
+            if hunt.get_match(uow, user_id, finding_id) is None:
+                return _JSON({"error": "not found"}, status_code=404)
+            app = uow.fetchone(
+                "SELECT id FROM applications WHERE user_id = ? AND finding_id = ?"
+                " ORDER BY id DESC LIMIT 1",
+                (user_id, finding_id),
+            )
+            if app is None:
+                return _JSON({"error": "no application for this match yet"}, status_code=400)
+            result = apply_service.record_outcome(uow, user_id, app["id"], outcome)
+            response = _action_response(result)
+            if response.status_code == 204:
+                uow.commit()
+        finally:
+            uow.close()
+        return response
 
     async def list_pipeline_route(request: Request) -> Response:
         user_id = _current_user(request)
@@ -219,9 +336,14 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         Route("/v1/auth/magic-link", request_magic_link, methods=["POST"]),
         Route("/v1/auth/redeem", redeem, methods=["GET"]),
         Route("/v1/profile", get_profile, methods=["GET"]),
+        Route("/v1/profile", post_profile, methods=["POST"]),
         Route("/v1/pipeline", list_pipeline_route, methods=["GET"]),
         Route("/v1/pipeline/stats", pipeline_stats_route, methods=["GET"]),
         Route("/v1/matches/{id}", get_match_route, methods=["GET"]),
+        Route("/v1/matches/{id}/approve", approve_match_route, methods=["POST"]),
+        Route("/v1/matches/{id}/discard", discard_match_route, methods=["POST"]),
+        Route("/v1/matches/{id}/restore", restore_match_route, methods=["POST"]),
+        Route("/v1/matches/{id}/outcome", record_outcome_route, methods=["POST"]),
         Route("/v1/account/export", account_export, methods=["POST"]),
         Route("/v1/account/delete", account_delete, methods=["POST"]),
     ]
