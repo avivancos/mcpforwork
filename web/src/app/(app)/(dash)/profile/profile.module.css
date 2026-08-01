@@ -1,0 +1,129 @@
+/* /profile — tabbed editor (brief §5): Required · Deep · Achievements · Style. */
+
+.col {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 5px 14px;
+  color: var(--ink-2);
+}
+
+.tabActive {
+  background: var(--btn-dark-bg);
+  color: var(--btn-dark-text);
+  border-color: var(--btn-dark-bg);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardTitle {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.saveRow {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
+.saved {
+  font-size: 12.5px;
+  color: var(--ok);
+}
+
+.achRow {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 0;
+}
+
+.achRow + .achRow {
+  border-top: 1px solid var(--border-hair);
+}
+
+.achText {
+  font-size: 13.5px;
+  color: var(--ink-label);
+  line-height: 1.45;
+}
+
+.srcTag {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  border: 1px solid var(--border);
+  background: var(--stone-chip-bg);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.clientBand {
+  border: 1px dashed var(--border-input);
+  border-radius: 14px;
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--bg-side);
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.clientBandTitle {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink-label);
+}
+
+.tierTag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--border-input);
+  border-radius: 99px;
+  padding: 3px 10px;
+  flex-shrink: 0;
+}
+
+.styleQuote {
+  font-size: 13.5px;
+  color: var(--ink-label);
+  line-height: 1.55;
+  border-left: 3px solid var(--accent-tint-border);
+  padding-left: 14px;
+}

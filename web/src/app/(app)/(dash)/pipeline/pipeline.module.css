@@ -1,0 +1,440 @@
+/* /pipeline — comp 4e (desktop), 4g (mobile), 4i (dark). */
+
+/* ---- insight strip ---- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.tile {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tileLabel {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.tileValue {
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.tileValueDim {
+  font-size: 14px;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.tileSub {
+  font-size: 11.5px;
+  color: var(--ink-4);
+}
+
+.tileWarn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
+.tileWarn .tileLabel,
+.tileWarn .tileSub {
+  color: var(--warn-muted);
+}
+
+.tileWarn .tileValue {
+  color: var(--warn-strong);
+}
+
+.tileLabelShort {
+  display: none;
+}
+
+/* ---- section heading ---- */
+
+.sectionHead {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.sectionHeadWarn {
+  color: var(--warn-muted);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---- needs-you card ---- */
+
+.needsCard {
+  background: var(--card);
+  border: 1px solid var(--warn-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.needsRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 20px;
+  align-items: center;
+  padding: 14px 20px;
+}
+
+.needsRow + .needsRow {
+  border-top: 1px solid var(--border-hair);
+}
+
+.needsTitle {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.needsContext {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.reviewBtn {
+  border: 1px solid var(--border-input);
+  background: var(--card-raised);
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* ---- filter pills ---- */
+
+.tableHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pills {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.pill {
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 4px 12px;
+  color: var(--ink-2);
+}
+
+.pillActive {
+  background: var(--btn-dark-bg);
+  color: var(--btn-dark-text);
+  border-color: var(--btn-dark-bg);
+}
+
+/* ---- table ---- */
+
+.table {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  /* No overflow:hidden — it would clip the OutcomeMenu popover. Round the
+     first/last rows instead so row backgrounds respect the corners. */
+}
+
+.headerRow {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.table > .row:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.row,
+.headerRow {
+  display: grid;
+  grid-template-columns: 44px 1fr 110px 130px 150px 110px;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 20px;
+}
+
+.row {
+  border-bottom: 1px solid var(--border-hair);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.headerRow {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-hair);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+
+.rowNew {
+  background: var(--row-alt);
+}
+
+.fit {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.fitHigh {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.roleName {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.roleWhere {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.consent {
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.auditLink {
+  color: var(--link-green);
+}
+
+.updated {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.action {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+  font-size: 12px;
+}
+
+.openLink {
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.mutedAction {
+  color: var(--ink-2);
+}
+
+.rowFaded .roleName,
+.rowFaded .fit {
+  color: var(--ink-3);
+}
+
+.rowFaded .roleWhere,
+.rowFaded .updated,
+.rowFaded .consent {
+  color: var(--ink-4);
+}
+
+.rowFaded .mutedAction {
+  color: var(--ink-4);
+}
+
+/* outcome popover (native details) */
+.outcome {
+  position: relative;
+}
+
+.outcome summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.outcome summary::-webkit-details-marker {
+  display: none;
+}
+
+.outcomeMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--shadow-card);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  z-index: 20;
+}
+
+.outcomeItem {
+  text-align: left;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+}
+
+.outcomeItem:hover {
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--ink-4);
+  padding: 2px 4px;
+}
+
+.empty {
+  padding: 48px 20px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+/* ---- mobile (4g) ---- */
+
+@media (max-width: 768px) {
+  .stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .tile {
+    padding: 10px 12px;
+    gap: 1px;
+  }
+
+  .tileValue {
+    font-size: 18px;
+  }
+
+  .tileLabel {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+
+  .tileResponses {
+    display: none;
+  }
+
+  .tileLabelLong {
+    display: none;
+  }
+
+  .tileLabelShort {
+    display: inline;
+  }
+
+  .tileSub {
+    display: none;
+  }
+
+  /* needs-you rows become stacked cards with a full-width dark CTA */
+  .needsCard {
+    border-radius: 14px;
+  }
+
+  .needsRow {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .needsRow .chipSlot {
+    order: -1;
+    justify-self: start;
+  }
+
+  .reviewBtn {
+    background: var(--btn-dark-bg);
+    color: var(--btn-dark-text);
+    border: none;
+    border-radius: 9px;
+    padding: 12px 0;
+    font-size: 13.5px;
+    text-align: center;
+    width: 100%;
+  }
+
+  .tableHead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .headerRow {
+    display: none;
+  }
+
+  .table {
+    border-radius: 14px;
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 13px 16px;
+    gap: 10px;
+  }
+
+  .row > .fit,
+  .row > .consent,
+  .row > .updated {
+    display: none;
+  }
+
+  .roleName {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .roleWhere {
+    font-size: 11px;
+  }
+
+  .action {
+    flex-shrink: 0;
+  }
+
+  .btnCompact {
+    padding: 6px 12px;
+    min-width: 44px;
+    min-height: 32px;
+  }
+}

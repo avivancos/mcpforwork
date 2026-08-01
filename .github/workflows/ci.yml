@@ -42,3 +42,34 @@ jobs:
 
       - name: Tests
         run: uv run pytest
+
+  web:
+    # Isolated toolchain for web/ (ADR 0002) — the Python job is untouched.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        # --ignore-scripts: don't run dependency lifecycle scripts on CI
+        # (supply-chain hardening). The build needs none of them.
+        run: npm ci --ignore-scripts
+
+      - name: No LLM SDKs in the dependency tree
+        # Structural invariant (zero server-side LLM) mirrored for JS —
+        # the import-linter of the web layer.
+        run: npm run check:no-llm-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

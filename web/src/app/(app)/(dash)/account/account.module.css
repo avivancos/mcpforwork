@@ -1,0 +1,193 @@
+/* /account/* — billing, data & privacy, sessions (desktop-first per brief §8). */
+
+.col {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.subnav {
+  display: flex;
+  gap: 6px;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+
+.subnavItem {
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 5px 14px;
+  color: var(--ink-2);
+}
+
+.subnavActive {
+  background: var(--btn-dark-bg);
+  color: var(--btn-dark-text);
+  border-color: var(--btn-dark-bg);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cardTitle {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.priceValue {
+  font-size: 40px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.priceNote {
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.checkList {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--ink-label);
+}
+
+.checkItem {
+  display: flex;
+  gap: 9px;
+}
+
+.checkMark {
+  color: var(--accent);
+}
+
+.note {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.gapNote {
+  border: 1px dashed var(--border-input);
+  border-radius: 9px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  background: var(--bg-side);
+}
+
+.successBanner {
+  border: 1px solid var(--ok-border);
+  background: var(--ok-bg);
+  color: var(--ok);
+  border-radius: 10px;
+  padding: 13px 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.cancelBanner {
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-strong);
+  border-radius: 10px;
+  padding: 13px 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.trialNudge {
+  border: 1px solid var(--accent-tint-border);
+  background: var(--accent-tint-soft);
+  border-radius: 10px;
+  padding: 12px 15px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-label);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  font-size: 13.5px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--border-hair);
+}
+
+.rowSub {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.dangerCard {
+  border-color: var(--danger-border);
+}
+
+.dangerTitle {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.confirmInput {
+  border: 1px solid var(--danger-border);
+  border-radius: 9px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  background: var(--card);
+}
+
+.btnDanger {
+  background: var(--danger);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-weight: 600;
+  font-size: 13.5px;
+  align-self: flex-start;
+}
+
+.btnDanger:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.auditRow {
+  display: flex;
+  gap: 14px;
+  padding: 11px 0;
+  font-size: 12.5px;
+  align-items: baseline;
+}
+
+.auditRow + .auditRow {
+  border-top: 1px solid var(--border-hair);
+}
+
+.auditAt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-4);
+  white-space: nowrap;
+  min-width: 110px;
+}

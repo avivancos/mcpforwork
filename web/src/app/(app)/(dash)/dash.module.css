@@ -1,0 +1,246 @@
+/* Dashboard shell — comps 4e (desktop) / 4g (mobile) / 4i (dark). */
+
+.shell {
+  display: grid;
+  grid-template-columns: 212px 1fr;
+  min-height: 100dvh;
+}
+
+/* ---- sidebar ---- */
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  background: var(--bg-side);
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+}
+
+.sidebarLogo {
+  padding: 0 10px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13.5px;
+}
+
+.navItem {
+  color: var(--ink-2);
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+
+.navItem:hover {
+  color: var(--ink);
+}
+
+.navItemActive {
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.sidebarFoot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.autonomyCard {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 9px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.autonomyLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.autonomyState {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.autonomyHint {
+  font-size: 11px;
+  color: var(--ink-4);
+  line-height: 1.4;
+}
+
+.trialLine {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  padding: 0 4px;
+}
+
+.trialPrice {
+  color: var(--link-green);
+  font-weight: 500;
+}
+
+/* ---- top bar (shared across dash pages) ---- */
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 32px;
+  border-bottom: 1px solid var(--border);
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.topBarTitle {
+  font-weight: 650;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.connChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
+  border: 1px solid var(--ok-border);
+  background: var(--ok-bg);
+  border-radius: 99px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.refreshBtn {
+  border: 1px solid var(--border-input);
+  background: var(--card);
+  border-radius: 7px;
+  padding: 5px 12px;
+  color: var(--ink-label);
+  font-weight: 500;
+  font-size: 12.5px;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.content {
+  padding: 24px 32px 36px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ---- mobile header + bottom tabs (4g) ---- */
+
+.mobileHeader {
+  display: none;
+}
+
+.tabs {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobileHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px 20px;
+  }
+
+  .topBar {
+    padding: 4px 20px 12px 20px;
+    border-bottom: none;
+  }
+
+  .topBarTitle {
+    font-size: 19px;
+  }
+
+  .connChipTop {
+    display: none;
+  }
+
+  .content {
+    padding: 0 20px 96px 20px;
+    gap: 16px;
+  }
+
+  .tabs {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    border-top: 1px solid var(--border);
+    background: var(--card);
+    padding: 10px 0 22px 0;
+    z-index: 10;
+  }
+
+  .tab {
+    flex: 1;
+    text-align: center;
+    font-size: 11px;
+    color: var(--ink-4);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .tabIcon {
+    font-size: 15px;
+    line-height: 1;
+  }
+
+  .tabActive {
+    color: var(--accent-text);
+    font-weight: 500;
+  }
+}

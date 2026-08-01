@@ -1,0 +1,174 @@
+/* Standalone /pricing — light-only, inherits design tokens. */
+
+.page {
+  background: var(--bg);
+  min-height: 100dvh;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.navRight {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 24px 96px 24px;
+}
+
+.head {
+  padding: 64px 0 40px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  text-align: center;
+}
+
+.h1 {
+  font-size: 40px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.lead {
+  font-size: 16px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  max-width: 560px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cardHero {
+  border: 2px solid var(--accent-strong);
+  position: relative;
+}
+
+.badge {
+  position: absolute;
+  top: -11px;
+  left: 24px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 99px;
+}
+
+.name {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.priceLine {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.priceValue {
+  font-size: 40px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.priceNote {
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--ink-label);
+}
+
+.check {
+  display: flex;
+  gap: 9px;
+}
+
+.check b {
+  font-weight: 400;
+  color: var(--accent);
+}
+
+.term {
+  margin-top: auto;
+  background: var(--term-bg);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--term-text);
+}
+
+.cta {
+  margin-top: auto;
+  background: var(--accent-strong);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 9px;
+  font-weight: 600;
+  font-size: 14.5px;
+  text-align: center;
+}
+
+.foot {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.foot a {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+@media (max-width: 700px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .h1 {
+    font-size: 30px;
+  }
+  .head {
+    padding-top: 40px;
+  }
+}

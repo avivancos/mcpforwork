@@ -1,0 +1,79 @@
+# mcpfor.work — full stack (ADR 0003 · card W1.2).
+#
+#   docker compose up --build
+#     web  → http://localhost:2200        landing · docs · dashboard (fixtures demo)
+#     mcp  → http://localhost:8500/mcp    networked MCP connector (point a client here)
+#
+# Host ports are overridable to dodge collisions with other local stacks:
+#   WEB_PORT=3001 MCP_PORT=8600 docker compose up --build
+#
+# The dashboard runs on the in-memory demo dataset (MCPFORWORK_FIXTURES=1)
+# because the FastAPI parity API it reads from does not exist yet (S6.x gap,
+# ADR 0002). When it lands, add an `api` service and uncomment MCPFORWORK_API_URL
+# on `web` — that is the whole switch.
+
+services:
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mcpforwork-mcp
+    environment:
+      MCPFORWORK_DATA_DIR: /data
+    # Run the FastMCP server over streamable-http bound to all interfaces.
+    # FastMCP's constructor hard-codes host="127.0.0.1" (overriding FASTMCP_HOST),
+    # so we set it on the settings object before run() — the supported path.
+    # transport_security=None disables DNS-rebinding protection for this LOCAL
+    # demo; S6.1 configures allowed_hosts + auth for a real deployment.
+    command:
+      - python
+      - -c
+      - |
+        from mcpforwork.entrypoints.mcp.server import mcp
+        mcp.settings.host = "0.0.0.0"
+        mcp.settings.port = 8500
+        mcp.settings.transport_security = None
+        mcp.run(transport="streamable-http")
+    ports:
+      - "${MCP_PORT:-8500}:8500"
+    volumes:
+      - mcpforwork-data:/data
+    healthcheck:
+      # The port serving HTTP is enough here; a real MCP-protocol handshake
+      # check is an S6.x follow-up. 127.0.0.1 (not localhost) to avoid the
+      # container resolving to IPv6 ::1 while the server binds IPv4.
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8500), 3).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: mcpforwork-web
+    environment:
+      NODE_ENV: production
+      # No parity API yet → run the demo dataset deliberately (the fail-closed
+      # guard in ADR 0002 refuses to boot in production without this).
+      MCPFORWORK_FIXTURES: "1"
+      # When the API service exists, drop MCPFORWORK_FIXTURES and set:
+      # MCPFORWORK_API_URL: http://api:8080
+    ports:
+      - "${WEB_PORT:-2200}:3000"
+    depends_on:
+      - mcp
+    healthcheck:
+      # 127.0.0.1, not localhost: alpine resolves localhost to ::1 first, but
+      # the Next standalone server binds IPv4.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  mcpforwork-data:

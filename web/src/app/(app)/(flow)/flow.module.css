@@ -1,0 +1,519 @@
+/* Flow pages (/connect, /onboarding, /login) — comps 4a/4c/4j/4h.
+   Centered column on the quiet surface, slim top bar, no sidebar. */
+
+.page {
+  min-height: 100dvh;
+  background: var(--bg-quiet);
+  display: flex;
+  flex-direction: column;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 48px;
+}
+
+.topBarBordered {
+  border-bottom: 1px solid var(--border);
+}
+
+.topBarMeta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.email {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.trialChip {
+  border: 1px solid var(--border-input);
+  border-radius: 99px;
+  padding: 4px 12px;
+  background: var(--card);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.skip {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 64px 20px 88px 20px;
+}
+
+.col {
+  width: 100%;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.colWide {
+  max-width: 640px;
+  gap: 24px;
+}
+
+.headBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.h1 {
+  font-size: 32px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.sub {
+  font-size: 15px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+/* ---- checklist steps (4a) ---- */
+
+.step {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.stepDot {
+  width: 28px;
+  height: 28px;
+  border-radius: 99px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.stepDotDone {
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-border);
+  color: var(--ok);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.stepDotActive {
+  background: var(--accent-strong);
+  color: #ffffff;
+}
+
+.stepDotPending {
+  border: 1px dashed var(--border-input);
+  color: var(--ink-4);
+  background: var(--card);
+}
+
+.stepBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.stepText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 3px;
+}
+
+.stepTitle {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.stepTitleMuted {
+  color: var(--ink-3);
+}
+
+.stepTitleFaint {
+  color: var(--ink-4);
+}
+
+.stepSub {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.stepSubFaint {
+  color: var(--ink-4);
+}
+
+/* client cards */
+.clients {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.clientCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clientCardHero {
+  border-color: var(--accent-tint-border);
+  box-shadow: var(--shadow-accent);
+}
+
+.clientName {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.clientDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+
+.clientSub {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.clientCta {
+  padding: 10px 0;
+  border-radius: 8px;
+  font-size: 13.5px;
+  text-align: center;
+  width: 100%;
+}
+
+/* connector url row */
+.urlRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 14px;
+}
+
+.url {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copyBtn {
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--ink-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 9px;
+  flex-shrink: 0;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--ink-4);
+  line-height: 1.5;
+}
+
+.foot {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.footStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.footLink {
+  font-size: 13px;
+  color: var(--link-green);
+  font-weight: 500;
+}
+
+/* ---- onboarding (4c/4h) ---- */
+
+.progressHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.progressStep {
+  color: var(--accent);
+}
+
+.segments {
+  display: flex;
+  gap: 6px;
+}
+
+.segment {
+  flex: 1;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--progress-track);
+}
+
+.segmentDone {
+  background: var(--accent-strong);
+}
+
+.formCard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-label);
+}
+
+.fieldNote {
+  font-weight: 400;
+  color: var(--ink-4);
+}
+
+.input {
+  border: 1px solid var(--border-input);
+  border-radius: 9px;
+  padding: 11px 14px;
+  font-size: 14.5px;
+  background: var(--card);
+  width: 100%;
+}
+
+.input:focus {
+  border: 1.5px solid var(--accent-strong);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+  padding: 10.5px 13.5px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.chipsInput {
+  border: 1px solid var(--border-input);
+  border-radius: 9px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  background: var(--card);
+  min-height: 43px;
+}
+
+.cityChip {
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-tint-border);
+  color: var(--accent-text);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 12.5px;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.chipsInput input {
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 13px;
+  flex: 1;
+  min-width: 80px;
+  color: var(--ink);
+  padding: 4px 0;
+}
+
+.chipsInput input::placeholder {
+  color: var(--ink-4);
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--border-input);
+  border-radius: 9px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.segmentedOpt {
+  flex: 1;
+  padding: 11px 0;
+  text-align: center;
+  color: var(--ink-2);
+  background: var(--card);
+}
+
+.segmentedOpt + .segmentedOpt {
+  border-left: 1px solid var(--border);
+}
+
+.segmentedOptActive {
+  background: var(--btn-dark-bg);
+  color: var(--btn-dark-text);
+  font-weight: 500;
+}
+
+.wizNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.back {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.continue {
+  background: var(--accent-strong);
+  color: #ffffff;
+  padding: 12px 26px;
+  border-radius: 9px;
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.laterBand {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  line-height: 1.55;
+}
+
+.laterTag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ok);
+  border: 1px solid var(--ok-border);
+  background: var(--ok-bg);
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ---- mobile (4h) ---- */
+
+@media (max-width: 480px) {
+  .topBar {
+    padding: 16px 20px;
+  }
+
+  .center {
+    padding: 8px 20px 28px 20px;
+  }
+
+  .h1 {
+    font-size: 23px;
+    line-height: 1.2;
+  }
+
+  .sub {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .formCard {
+    padding: 18px;
+    gap: 16px;
+  }
+
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+
+  .clients {
+    grid-template-columns: 1fr;
+  }
+
+  .wizNav {
+    flex-direction: column-reverse;
+    gap: 14px;
+  }
+
+  .continue {
+    width: 100%;
+    padding: 14px 0;
+    border-radius: 10px;
+    font-size: 15px;
+    text-align: center;
+  }
+
+  .center {
+    padding-top: 8px;
+  }
+}

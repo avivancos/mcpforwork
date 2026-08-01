@@ -1,0 +1,26 @@
+{
+  "name": "mcpforwork-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "mcpfor.work web surfaces: landing, docs, hosted dashboard 1.0 (thin driving adapter — see backlog/decisions/0002_nextjs_web_surfaces.md)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test",
+    "check:no-llm-deps": "node scripts/check-no-llm-deps.mjs"
+  },
+  "dependencies": {
+    "next": "^15.3.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.8.0"
+  }
+}
