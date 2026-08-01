@@ -235,10 +235,13 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         except (KeyError, ValueError):
             return None
 
+    # Structured error kinds → HTTP status (S6.10 — no substring sniffing).
+    # Unknown and foreign matches are indistinguishable (both not_found → 404).
+    _KIND_STATUS = {"not_found": 404, "invalid_state": 400, "invalid_input": 400}
+
     def _action_response(result: dict[str, Any]) -> Response:
         if "error" in result:
-            # Unknown and foreign matches are indistinguishable (both 404).
-            status = 404 if "not found" in result["error"] else 400
+            status = _KIND_STATUS.get(result.get("kind", ""), 400)
             return _JSON({"error": result["error"]}, status_code=status)
         return Response(status_code=204)
 

@@ -298,3 +298,129 @@ def test_profile_post_does_not_create_schema_for_display_fields(api):
         assert profile is None or profile.get("min_salary_amount") is None
     finally:
         uow.close()
+
+
+# --------------------------------------------------------------------------- #
+# S6.10 — structured error kinds (no substring sniffing) + action test gaps
+# --------------------------------------------------------------------------- #
+def test_review_errors_carry_a_structured_kind(env):
+    uid = 1
+    uow = connect(f"sqlite:///{env / 'api.db'}")
+    try:
+        uow.execute("INSERT INTO users (id, email) VALUES (1, 'ada@example.com')")
+        hunt.submit_findings(
+            uow, 1, "weworkremotely", [{"url": "https://a.example/1", "title": "Nurse"}]
+        )
+        fid = uow.fetchone("SELECT id FROM explore_findings WHERE user_id = 1")["id"]
+        uow.commit()
+
+        assert review.approve_match(uow, uid, 9999)["kind"] == "not_found"
+        assert review.discard_match(uow, uid, 9999)["kind"] == "not_found"
+        assert review.restore_match(uow, uid, 9999)["kind"] == "not_found"
+        # state-guarded actions on an existing match
+        assert review.restore_match(uow, uid, fid)["kind"] == "invalid_state"
+        review.approve_match(uow, uid, fid)
+        assert review.approve_match(uow, uid, fid)["kind"] == "invalid_state"
+    finally:
+        uow.close()
+
+
+def test_record_outcome_errors_carry_a_structured_kind(env):
+    uow = connect(f"sqlite:///{env / 'api.db'}")
+    try:
+        uow.execute("INSERT INTO users (id, email) VALUES (1, 'ada@example.com')")
+        hunt.submit_findings(
+            uow, 1, "weworkremotely", [{"url": "https://a.example/1", "title": "Nurse"}]
+        )
+        fid = uow.fetchone("SELECT id FROM explore_findings WHERE user_id = 1")["id"]
+        profiles.create_profile(uow, 1, {"full_name": "Ada Lovelace"})
+        review.approve_match(uow, 1, fid)
+        app_id = apply_service.start_application(uow, 1, fid)["application_id"]
+        uow.commit()
+
+        bad = apply_service.record_outcome(uow, 1, app_id, "ghosted")
+        assert bad["kind"] == "invalid_input"
+        missing = apply_service.record_outcome(uow, 1, 9999, "rejected")
+        assert missing["kind"] == "not_found"
+        # application still in draft — outcomes only apply after submission
+        early = apply_service.record_outcome(uow, 1, app_id, "rejected")
+        assert early["kind"] == "invalid_state"
+    finally:
+        uow.close()
+
+
+def test_outcome_on_a_filling_application_is_a_400(api):
+    client, env = api
+    uid = _uid(env)
+    fid = _seed_finding(env, uid, "https://example.com/filling")
+    uow = connect(f"sqlite:///{env / 'api.db'}")
+    try:
+        if profiles.get_profile(uow, uid) is None:
+            profiles.create_profile(uow, uid, {"full_name": "Ada Lovelace"})
+        review.approve_match(uow, uid, fid)
+        app_id = apply_service.start_application(uow, uid, fid)["application_id"]
+        uow.execute(
+            "UPDATE applications SET state = 'filling' WHERE id = ? AND user_id = ?",
+            (app_id, uid),
+        )
+        uow.commit()
+    finally:
+        uow.close()
+    r = client.post(f"/v1/matches/{fid}/outcome", json={"outcome": "rejected"})
+    assert r.status_code == 400  # invalid transition via the API, not just approve
+
+
+def test_foreign_match_discard_restore_and_outcome_are_404(api):
+    client, env = api
+    uow = connect(f"sqlite:///{env / 'api.db'}")
+    try:
+        uow.execute("INSERT INTO users (email) VALUES ('bob@example.com')")
+        bob = uow.fetchone("SELECT id FROM users WHERE email = 'bob@example.com'")["id"]
+        hunt.submit_findings(
+            uow, bob, "weworkremotely", [{"url": "https://b.example/9", "title": "T"}]
+        )
+        bob_fid = uow.fetchone("SELECT id FROM explore_findings WHERE user_id = ?", (bob,))["id"]
+        uow.commit()
+    finally:
+        uow.close()
+    assert client.post(f"/v1/matches/{bob_fid}/discard").status_code == 404
+    assert client.post(f"/v1/matches/{bob_fid}/restore").status_code == 404
+    r = client.post(f"/v1/matches/{bob_fid}/outcome", json={"outcome": "rejected"})
+    assert r.status_code == 404
+
+
+def test_restore_writes_an_audit_row(api):
+    client, env = api
+    uid = _uid(env)
+    fid = _seed_finding(env, uid, "https://example.com/restore-audit")
+    client.post(f"/v1/matches/{fid}/discard")
+    assert client.post(f"/v1/matches/{fid}/restore").status_code == 204
+    uow = connect(f"sqlite:///{env / 'api.db'}")
+    try:
+        row = uow.fetchone(
+            "SELECT detail FROM audit_log WHERE user_id = ? AND action = 'restore_match'",
+            (uid,),
+        )
+        assert row is not None
+        assert json.loads(row["detail"])["finding_id"] == fid
+    finally:
+        uow.close()
+
+
+def test_profile_post_does_not_smuggle_raw_intake_keys(api):
+    client, env = api
+    uid = _uid(env)
+    assert client.post("/v1/profile", json={"name": "Ada"}).status_code == 204
+    # raw intake column names in the web body must NOT pass through
+    r = client.post(
+        "/v1/profile",
+        json={"full_name": "Mallory", "label": "x", "min_salary_amount": 999999},
+    )
+    assert r.status_code == 204
+    uow = connect(f"sqlite:///{env / 'api.db'}")
+    try:
+        profile = profiles.get_profile(uow, uid)
+        assert profile["full_name"] == "Ada"  # untouched by the smuggled key
+        assert profile.get("min_salary_amount") is None
+    finally:
+        uow.close()

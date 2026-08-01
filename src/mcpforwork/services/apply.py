@@ -367,12 +367,15 @@ def record_outcome(
 ) -> dict[str, Any]:
     """Store what actually happened — the calibration loop's raw data."""
     if outcome not in OUTCOMES:
-        return {"error": f"outcome must be one of {sorted(OUTCOMES)}"}
+        return {"error": f"outcome must be one of {sorted(OUTCOMES)}", "kind": "invalid_input"}
     app = _load_application(uow, user_id, application_id)
     if app is None:
-        return {"error": f"application {application_id} not found"}
+        return {"error": f"application {application_id} not found", "kind": "not_found"}
     if app["state"] not in ("submitted", "verified"):
-        return {"error": f"application is '{app['state']}' — outcomes apply after submission"}
+        return {
+            "error": f"application is '{app['state']}' — outcomes apply after submission",
+            "kind": "invalid_state",
+        }
     uow.execute(
         "UPDATE applications SET outcome = ?, updated_at = ? WHERE id = ? AND user_id = ?",
         (outcome, utcnow_iso(), application_id, user_id),

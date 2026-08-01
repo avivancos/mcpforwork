@@ -40,6 +40,15 @@ jobs:
             exit 1
           fi
 
+      - name: No substring error matching in the API entrypoint
+        # S6.10: services return structured error kinds; the API maps kinds to
+        # status codes. Substring sniffing on error messages fails the build.
+        run: |
+          if grep -RIn --include='*.py' '"not found" in' src/mcpforwork/entrypoints/api/; then
+            echo "substring error matching found — map structured error kinds instead"
+            exit 1
+          fi
+
       - name: Tests
         run: uv run pytest
 
