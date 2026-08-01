@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StageChip } from "@/components/StageChip";
 import { api } from "@/lib/api";
+import { timeAgo } from "@/lib/time";
 import dashStyles from "../../dash.module.css";
 import { TopBar } from "../../TopBar";
 import { MatchActions } from "./MatchActions";
@@ -49,7 +50,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
           <div className={styles.statusRow}>
             <StageChip stage={match.stage} size={10.5} />
             {match.consent && <span>Supervised — every submit is yours</span>}
-            <span style={{ color: "var(--ink-4)" }}>Updated {match.updated}</span>
+            <span style={{ color: "var(--ink-4)" }}>Updated {timeAgo(match.updated)}</span>
           </div>
 
           <MatchActions id={match.id} stage={match.stage} postingUrl={match.postingUrl} />
@@ -78,7 +79,7 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
             ) : (
               match.audit.map((e, i) => (
                 <div key={i} className={styles.auditRow}>
-                  <span className={styles.auditAt}>{e.at}</span>
+                  <span className={styles.auditAt}>{timeAgo(e.at)}</span>
                   <span>{e.event}</span>
                 </div>
               ))

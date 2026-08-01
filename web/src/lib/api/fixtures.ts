@@ -67,6 +67,13 @@ const detailDefaults = (over: Partial<Row["detail"]> = {}): Row["detail"] => ({
   ...over,
 });
 
+// ISO-8601 across the seam like the real API (W6.1); the UI humanizes at
+// render. Relative to module load so the demo always looks fresh.
+const isoAgo = (ms: number) => new Date(Date.now() - ms).toISOString();
+const MIN = 60_000;
+const HOUR = 60 * MIN;
+const DAY = 24 * HOUR;
+
 const rowsSeed: Row[] = [
   {
     id: "m_8k3d",
@@ -76,7 +83,7 @@ const rowsSeed: Row[] = [
     city: "Dublin",
     stage: "awaiting_you",
     consent: "supervised",
-    updated: "25 min ago",
+    updated: isoAgo(25 * MIN),
     needsYou: "Draft ready · facts-checked · paused 25 min ago",
     detail: detailDefaults({
       postingUrl: "https://careers.materprivate.ie/apply/icu-staff-nurse",
@@ -85,8 +92,8 @@ const rowsSeed: Row[] = [
         { id: "as2", name: "cover—mater—icu.md", kind: "cover", note: "draft v2 · in your voice" },
       ],
       audit: [
-        { at: "Today 14:02", event: "start_application — preflight passed (dedup, cap, playbook)" },
-        { at: "Today 14:09", event: "request_submit — consent L0, paused for human" },
+        { at: isoAgo(2 * HOUR), event: "start_application — preflight passed (dedup, cap, playbook)" },
+        { at: isoAgo(118 * MIN), event: "request_submit — consent L0, paused for human" },
       ],
     }),
   },
@@ -98,11 +105,11 @@ const rowsSeed: Row[] = [
     city: "Dublin",
     stage: "submitted",
     consent: "supervised",
-    updated: "Yesterday",
+    updated: isoAgo(26 * HOUR),
     detail: detailDefaults({
       audit: [
-        { at: "Yesterday 17:41", event: "request_submit — L0 approved by you" },
-        { at: "Yesterday 17:44", event: "confirm_submitted — evidence recorded" },
+        { at: isoAgo(26 * HOUR), event: "request_submit — L0 approved by you" },
+        { at: isoAgo(26 * HOUR - 3 * MIN), event: "confirm_submitted — evidence recorded" },
       ],
     }),
   },
@@ -114,9 +121,9 @@ const rowsSeed: Row[] = [
     city: "Sandyford",
     stage: "verified",
     consent: "supervised",
-    updated: "2 days ago",
+    updated: isoAgo(2 * DAY),
     detail: detailDefaults({
-      audit: [{ at: "2 days ago", event: "verify — confirmation email present" }],
+      audit: [{ at: isoAgo(2 * DAY), event: "verify — confirmation email present" }],
     }),
   },
   {
@@ -127,7 +134,7 @@ const rowsSeed: Row[] = [
     city: "Dublin",
     stage: "new_match",
     consent: null,
-    updated: "1 hr ago",
+    updated: isoAgo(HOUR),
     detail: detailDefaults(),
   },
   {
@@ -138,7 +145,7 @@ const rowsSeed: Row[] = [
     city: "Dublin",
     stage: "new_match",
     consent: null,
-    updated: "1 hr ago",
+    updated: isoAgo(HOUR),
     detail: detailDefaults(),
   },
   {
@@ -149,9 +156,9 @@ const rowsSeed: Row[] = [
     city: "Lucan",
     stage: "interview",
     consent: "supervised",
-    updated: "3 days ago",
+    updated: isoAgo(3 * DAY),
     detail: detailDefaults({
-      audit: [{ at: "3 days ago", event: "record_outcome — interview scheduled" }],
+      audit: [{ at: isoAgo(3 * DAY), event: "record_outcome — interview scheduled" }],
     }),
   },
   {
@@ -162,7 +169,7 @@ const rowsSeed: Row[] = [
     city: "Dublin",
     stage: "discarded",
     consent: null,
-    updated: "4 days ago",
+    updated: isoAgo(4 * DAY),
     detail: detailDefaults(),
   },
   {
@@ -173,24 +180,24 @@ const rowsSeed: Row[] = [
     city: "Dublin",
     stage: "awaiting_you",
     consent: "supervised",
-    updated: "1 hr ago",
+    updated: isoAgo(HOUR),
     needsYou: "2 screening questions need your answer",
     detail: detailDefaults({
-      audit: [{ at: "Today 13:20", event: "resolve_field — 2 ask_user fields pending" }],
+      audit: [{ at: isoAgo(HOUR), event: "resolve_field — 2 ask_user fields pending" }],
     }),
   },
 ];
 
 const sessionsSeed: SessionInfo[] = [
-  { id: "s1", device: "This browser · macOS · Dublin", lastSeen: "now", current: true },
-  { id: "s2", device: "iPhone · Safari", lastSeen: "2 days ago", current: false },
+  { id: "s1", device: "This browser · macOS · Dublin", lastSeen: isoAgo(0), current: true },
+  { id: "s2", device: "iPhone · Safari", lastSeen: isoAgo(2 * DAY), current: false },
 ];
 
 const auditSeed: AuditEntry[] = [
-  { at: "Today 14:09", event: "request_submit (L0) — ICU Staff Nurse, Mater Private" },
-  { at: "Yesterday 17:44", event: "confirm_submitted — Staff Nurse, St Vincent's UH" },
-  { at: "Mon 8 Jul", event: "profile updated — salary floor (private)" },
-  { at: "Sun 7 Jul", event: "connector granted — Claude (scopes: read/write, your data)" },
+  { at: isoAgo(118 * MIN), event: "request_submit (L0) — ICU Staff Nurse, Mater Private" },
+  { at: isoAgo(26 * HOUR), event: "confirm_submitted — Staff Nurse, St Vincent's UH" },
+  { at: isoAgo(3 * DAY), event: "profile updated — salary floor (private)" },
+  { at: isoAgo(4 * DAY), event: "connector granted — Claude (scopes: read/write, your data)" },
 ];
 
 /**
@@ -263,21 +270,21 @@ export const fixturesApi: Api = {
     if (r && r.stage === "new_match") {
       r.stage = "filling";
       r.consent = "supervised";
-      r.updated = "just now";
+      r.updated = isoAgo(0);
     }
   },
   async discardMatch(id) {
     const r = rows.find((x) => x.id === id);
     if (r && (r.stage === "new_match" || r.stage === "filling")) {
       r.stage = "discarded";
-      r.updated = "just now";
+      r.updated = isoAgo(0);
     }
   },
   async restoreMatch(id) {
     const r = rows.find((x) => x.id === id);
     if (r && r.stage === "discarded") {
       r.stage = "new_match";
-      r.updated = "just now";
+      r.updated = isoAgo(0);
     }
   },
   async recordOutcome(id, outcome: Outcome) {
@@ -288,7 +295,7 @@ export const fixturesApi: Api = {
     // collapse). The real API must enforce this transition server-side.
     if (r && (r.stage === "submitted" || r.stage === "verified" || r.stage === "interview")) {
       r.stage = outcome;
-      r.updated = "just now";
+      r.updated = isoAgo(0);
     }
   },
   async updateProfile(patch) {
@@ -302,9 +309,10 @@ export const fixturesApi: Api = {
     if (i >= 0) sessions.splice(i, 1);
   },
   async requestExport() {
-    accountAudit.unshift({ at: "just now", event: "GDPR export requested" });
+    accountAudit.unshift({ at: isoAgo(0), event: "GDPR export requested" });
+    return JSON.stringify({ preview: true, profile, rows: rows.map(strip) }, null, 2);
   },
   async deleteAccount() {
-    accountAudit.unshift({ at: "just now", event: "account deletion requested (pending confirm)" });
+    accountAudit.unshift({ at: isoAgo(0), event: "account deletion requested (pending confirm)" });
   },
 };

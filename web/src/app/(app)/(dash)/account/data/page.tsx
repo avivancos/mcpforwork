@@ -1,4 +1,5 @@
 import { api, usingFixtures } from "@/lib/api";
+import { timeAgo } from "@/lib/time";
 import dashStyles from "../../dash.module.css";
 import { TopBar } from "../../TopBar";
 import { AccountNav } from "../AccountNav";
@@ -29,12 +30,18 @@ export default async function DataPage() {
           <div className={styles.card}>
             <span className={styles.cardTitle}>Audit log</span>
             <div>
-              {audit.map((e, i) => (
-                <div key={i} className={styles.auditRow}>
-                  <span className={styles.auditAt}>{e.at}</span>
-                  <span>{e.event}</span>
+              {audit.length === 0 ? (
+                <div className={styles.auditRow} style={{ color: "var(--ink-4)" }}>
+                  No activity yet — consent decisions, submits, and profile changes land here.
                 </div>
-              ))}
+              ) : (
+                audit.map((e, i) => (
+                  <div key={i} className={styles.auditRow}>
+                    <span className={styles.auditAt}>{timeAgo(e.at)}</span>
+                    <span>{e.event}</span>
+                  </div>
+                ))
+              )}
             </div>
             <span className={styles.note}>
               Every consent decision, submit, and profile change is recorded here.
@@ -47,7 +54,7 @@ export default async function DataPage() {
               Removes your account and all data — profile, matches, applications, audit trail.
               This cannot be undone. Self-host data on your machine is unaffected.
             </span>
-            <DeleteAccount />
+            <DeleteAccount preview={usingFixtures} />
           </div>
         </div>
       </div>

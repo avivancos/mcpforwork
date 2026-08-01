@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { StageChip } from "@/components/StageChip";
 import { approveMatch, discardMatch, recordOutcome, restoreMatch } from "@/lib/actions";
 import type { Outcome, PipelineItem } from "@/lib/api/types";
+import { timeAgo } from "@/lib/time";
 import styles from "./pipeline.module.css";
 
 type Filter = "all" | "matches" | "applications" | "outcomes";
@@ -179,7 +180,7 @@ export function PipelineTable({ items }: { items: PipelineItem[] }) {
                   "—"
                 )}
               </span>
-              <span className={styles.updated}>{item.updated}</span>
+              <span className={styles.updated}>{timeAgo(item.updated)}</span>
               <div className={styles.action}>
                 <RowAction item={item} />
               </div>

@@ -27,8 +27,16 @@ export default async function DashLayout({ children }: { children: React.ReactNo
             <span className={styles.autonomyHint}>You click Submit. Autopilot: coming later.</span>
           </div>
           <span className={styles.trialLine}>
-            Trial · {subscription.trialDaysLeft} days left ·{" "}
-            <span className={styles.trialPrice}>{subscription.price}</span>
+            {subscription.price === "self-host" ? (
+              "Self-host · free forever"
+            ) : subscription.status === "trial" ? (
+              <>
+                Trial · {subscription.trialDaysLeft} days left ·{" "}
+                <span className={styles.trialPrice}>{subscription.price}</span>
+              </>
+            ) : (
+              <span className={styles.trialPrice}>{subscription.price}</span>
+            )}
           </span>
         </div>
       </aside>

@@ -17,7 +17,12 @@ export async function TopBar({ title }: { title: string }) {
         )}
       </div>
       <div className={styles.topBarRight}>
-        <span>Synced {connection.syncedMinAgo} min ago</span>
+        {/* -1 is the API's never-synced sentinel — say so, don't render it. */}
+        <span>
+          {connection.syncedMinAgo < 0
+            ? "Never synced"
+            : `Synced ${connection.syncedMinAgo} min ago`}
+        </span>
         <RefreshButton />
       </div>
     </div>

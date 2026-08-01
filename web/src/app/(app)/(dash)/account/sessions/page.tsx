@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { timeAgo } from "@/lib/time";
 import dashStyles from "../../dash.module.css";
 import { TopBar } from "../../TopBar";
 import { AccountNav } from "../AccountNav";
@@ -30,7 +31,7 @@ export default async function SessionsPage() {
                         </span>
                       )}
                     </div>
-                    <div className={styles.rowSub}>Last seen {s.lastSeen}</div>
+                    <div className={styles.rowSub}>Last seen {timeAgo(s.lastSeen)}</div>
                   </div>
                   {!s.current && <RevokeButton id={s.id} />}
                 </div>

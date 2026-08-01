@@ -16,18 +16,26 @@ export function DataActions({ preview = false }: { preview?: boolean }) {
         disabled={pending || requested}
         onClick={() =>
           start(async () => {
-            await requestExport();
+            const json = await requestExport();
+            // The API returns the export inline — offer it as a file download
+            // (self-host has no mailer to send a link with).
+            const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `mcpforwork-export-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
             setRequested(true);
           })
         }
       >
-        {requested ? "Export requested ✓" : "Request JSON export"}
+        {requested ? "Export downloaded ✓" : "Download JSON export"}
       </button>
       {requested && (
         <span className={styles.note}>
           {preview
-            ? "Preview mode — no email is sent. With the hosted API we'd email a download link."
-            : "We'll email a download link to your address."}
+            ? "Preview mode — the file contains the demo dataset, not real data."
+            : "Everything — profile, matches, applications, audit trail — is in that file."}
         </span>
       )}
     </div>
@@ -38,17 +46,20 @@ export function DataActions({ preview = false }: { preview?: boolean }) {
  * Destructive flow — type-to-confirm before the action is even enabled
  * (security hot spot from the kickoff: GDPR-delete confirmation).
  */
-export function DeleteAccount() {
+export function DeleteAccount({ preview = false }: { preview?: boolean }) {
   const [confirm, setConfirm] = useState("");
   const [done, setDone] = useState(false);
   const [pending, start] = useTransition();
   const armed = confirm === "delete my account";
 
   if (done) {
+    // The self-host API deletes IMMEDIATELY (no mailer exists to send a
+    // confirmation) — the copy must not promise an email that never comes.
     return (
       <span className={styles.note}>
-        Deletion requested. You&rsquo;ll receive a final confirmation email — nothing is removed
-        until you click it.
+        {preview
+          ? "Deletion requested. You’ll receive a final confirmation email — nothing is removed until you click it."
+          : "Account deleted — profile, matches, applications, and audit trail are gone. This browser is signed out."}
       </span>
     );
   }

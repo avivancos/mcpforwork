@@ -62,7 +62,19 @@ export function httpApi(rawBase: string): Api {
     updateProfile: (patch) => post("/v1/profile", patch),
     requestMagicLink: (email) => post("/v1/auth/magic-link", { email }),
     revokeSession: (id) => post(`/v1/sessions/${encodeURIComponent(id)}/revoke`),
-    requestExport: () => post("/v1/account/export"),
+    // The export arrives as the response body; hand it back as text so the
+    // caller can offer it as a file download (self-host has no mailer).
+    requestExport: async () => {
+      const cookie = (await cookies()).toString();
+      const res = await fetch(`${base}/v1/account/export`, {
+        method: "POST",
+        headers: { cookie },
+        cache: "no-store",
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      if (!res.ok) throw new Error(`API /v1/account/export → ${res.status}`);
+      return res.text();
+    },
     deleteAccount: () => post("/v1/account/delete"),
   };
 }

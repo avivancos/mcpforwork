@@ -29,7 +29,7 @@ export interface PipelineItem {
   stage: Stage;
   /** Non-null once an application exists. 1.0 is supervised-only. */
   consent: "supervised" | null;
-  updated: string; // humanized: "25 min ago", "Yesterday"
+  updated: string; // ISO-8601 across the seam; humanized at render (timeAgo)
   /** Set when stage === "awaiting_you" — why it's paused. */
   needsYou?: string;
 }
@@ -118,6 +118,7 @@ export interface Api {
   updateProfile(patch: Partial<Profile>): Promise<void>;
   requestMagicLink(email: string): Promise<void>;
   revokeSession(id: string): Promise<void>;
-  requestExport(): Promise<void>;
+  /** The self-host API returns the export inline — the UI downloads it as a file. */
+  requestExport(): Promise<string>;
   deleteAccount(): Promise<void>;
 }

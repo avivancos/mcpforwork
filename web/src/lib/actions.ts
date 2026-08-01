@@ -83,9 +83,10 @@ export async function revokeSession(id: string): Promise<void> {
   revalidatePath("/account/sessions");
 }
 
-export async function requestExport(): Promise<void> {
-  await api.requestExport();
+export async function requestExport(): Promise<string> {
+  const json = await api.requestExport();
   revalidatePath("/account/data");
+  return json;
 }
 
 export async function deleteAccount(): Promise<void> {
