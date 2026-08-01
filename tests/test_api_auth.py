@@ -164,19 +164,23 @@ def test_magic_link_rejects_a_control_char_email(api):
 
 
 def test_magic_link_url_uses_the_configured_origin_not_the_host_header(env, monkeypatch):
-    # Link-poisoning defense: the sign-in URL comes from trusted config, never a
-    # spoofable Host header.
+    # Link-poisoning defense, two layers: (1) S6.1c TrustedHost rejects a
+    # spoofed Host outright — the request never reaches the route; (2) the
+    # sign-in URL comes from trusted config, never the request origin.
     monkeypatch.setenv("MCPFORWORK_PUBLIC_BASE_URL", "https://app.mcpfor.work")
     mailer = _CapturingMailer()
     client = _client(mailer)
-    client.post(
+    r = client.post(
         "/v1/auth/magic-link",
         json={"email": "ada@example.com"},
         headers={"host": "attacker.evil"},
     )
+    assert r.status_code == 400  # TrustedHost: spoofed host rejected pre-route
+    assert mailer.sent == []  # no token minted, no email sent
+
+    client.post("/v1/auth/magic-link", json={"email": "ada@example.com"})
     link = mailer.sent[-1][1]
     assert link.startswith("https://app.mcpfor.work/v1/auth/redeem?token=")
-    assert "attacker.evil" not in link
 
 
 def test_account_delete_clears_the_session_cookie(api):

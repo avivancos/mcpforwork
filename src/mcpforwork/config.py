@@ -34,3 +34,11 @@ def local_user_id() -> int:
     instead; this helper is only for the local MCP process.
     """
     return int(os.environ.get("MCPFORWORK_USER_ID", "1"))
+
+
+def db_run_migrations() -> bool:
+    """Whether request-path connections run migrations on connect. Default on
+    (self-host SQLite ergonomics); set `MCPFORWORK_DB_RUN_MIGRATIONS=0` when
+    connecting as the restricted Postgres `app` role, which cannot run DDL —
+    migrations there are a deploy-time step for a privileged connection."""
+    return os.environ.get("MCPFORWORK_DB_RUN_MIGRATIONS", "1") != "0"

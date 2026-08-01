@@ -22,9 +22,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from mcpforwork import config
 from mcpforwork.adapters.db import connect
@@ -56,6 +59,88 @@ _WEB_OUTCOMES = {
 # An agent is "connected" when it acted within this window (audit rows are the
 # only signal the server has — it never sees the MCP transport itself).
 _CONNECTED_WINDOW_S = 24 * 3600
+
+# Body-size cap (S6.1c): the unauthenticated magic-link POST buffers
+# `await request.json()` — without a cap that is a memory-DoS vector.
+_MAX_BODY_BYTES = 64 * 1024
+_BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
+
+
+class _BodySizeCap:
+    """Pure-ASGI body cap. Fast path: a declared Content-Length over the cap is
+    rejected without reading a byte. A body with no declared length (chunked)
+    is buffered — bounded at cap+1 — and replayed to the app as a single
+    message; over the cap the middleware answers 413 itself. Buffering here
+    (not an exception from the receive channel) because the routes' blanket
+    `except Exception` around `request.json()` would swallow a raised signal.
+    """
+
+    def __init__(self, app: ASGIApp, max_bytes: int = _MAX_BODY_BYTES) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] not in _BODY_METHODS:
+            await self.app(scope, receive, send)
+            return
+        declared: int | None = None
+        for name, value in scope.get("headers", []):
+            if name.lower() == b"content-length":
+                try:
+                    declared = int(value)
+                except ValueError:
+                    declared = None  # untrustworthy header — the buffered path decides
+                break
+        if declared is not None:
+            if declared > self.max_bytes:
+                await self._reject(scope, receive, send)
+                return
+            await self.app(scope, receive, send)
+            return
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return  # client gone — nothing to serve
+            body.extend(message.get("body", b""))
+            if len(body) > self.max_bytes:
+                await self._reject(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+        sent = False
+
+        async def replay() -> Any:
+            nonlocal sent
+            if sent:
+                return {"type": "http.request", "body": b"", "more_body": False}
+            sent = True
+            return {"type": "http.request", "body": bytes(body), "more_body": False}
+
+        await self.app(scope, replay, send)
+
+    async def _reject(self, scope: Scope, receive: Receive, send: Send) -> None:
+        await _JSON({"error": "payload too large"}, status_code=413)(scope, receive, send)
+
+
+def _allowed_hosts() -> list[str]:
+    """TrustedHost allowlist (DNS-rebinding guard on LAN self-host). Default
+    serves local clients only — including httpx's dummy `testserver` host,
+    which never resolves and has no rebinding surface. IPv6 `::1` is absent on
+    purpose: TrustedHostMiddleware splits the Host header on ':', so a
+    bracketed IPv6 literal could never match. Set MCPFORWORK_ALLOWED_HOSTS
+    (comma-separated) to expose the API on a LAN hostname."""
+    raw = os.environ.get("MCPFORWORK_ALLOWED_HOSTS")
+    if raw:
+        return [h.strip() for h in raw.split(",") if h.strip()]
+    return ["localhost", "127.0.0.1", "testserver"]
+
+
+def _cookie_secure() -> bool:
+    """`Secure` on the session cookie. Default on; MCPFORWORK_COOKIE_SECURE=0
+    is the documented escape hatch for LAN-http self-host (no TLS), where a
+    Secure cookie is never stored and magic-link login could not work."""
+    return os.environ.get("MCPFORWORK_COOKIE_SECURE", "1") != "0"
 
 
 def _now() -> datetime:
@@ -136,11 +221,17 @@ def _unauthorized() -> Response:
     return _JSON({"error": "unauthorized"}, status_code=401)
 
 
+def _connect() -> Any:
+    """The request-path connection. `run_migrations` is config-driven so the
+    restricted Postgres `app` role (no DDL) can serve requests."""
+    return connect(config.db_url(), run_migrations=config.db_run_migrations())
+
+
 @contextlib.contextmanager
 def _authed(request: Request) -> Iterator[tuple[Any, dict[str, int] | None]]:
     """The per-route seam: an open UnitOfWork + the resolved session (or None).
     Mirrors the MCP server's `_tenant_uow` pattern."""
-    uow = connect(config.db_url())
+    uow = _connect()
     try:
         yield uow, _current_user(request, uow)
     finally:
@@ -158,7 +249,7 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         if not isinstance(body, dict):  # a JSON array/scalar has no .get
             return _JSON({"error": "invalid request"}, status_code=400)
         email = str(body.get("email", ""))
-        uow = connect(config.db_url())
+        uow = _connect()
         try:
             result = auth_session.request_magic_link(uow, email, now=_now())
             if "error" in result:
@@ -176,7 +267,7 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
 
     async def redeem(request: Request) -> Response:
         token = request.query_params.get("token", "")
-        uow = connect(config.db_url())
+        uow = _connect()
         try:
             result = auth_session.redeem_magic_link(uow, token, now=_now())
             if "error" in result:
@@ -201,7 +292,7 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
             cookie,
             max_age=_SESSION_MAX_AGE_S,
             httponly=True,
-            secure=True,
+            secure=_cookie_secure(),
             samesite="lax",
             path="/",
         )
@@ -455,7 +546,13 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         Route("/v1/account/export", account_export, methods=["POST"]),
         Route("/v1/account/delete", account_delete, methods=["POST"]),
     ]
-    return Starlette(routes=routes)
+    middleware = [
+        # Outermost first: reject a spoofed Host before any body is read.
+        # www_redirect=False — an API answers 400, it never redirects.
+        Middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts(), www_redirect=False),
+        Middleware(_BodySizeCap),
+    ]
+    return Starlette(routes=routes, middleware=middleware)
 
 
 app = create_app()
