@@ -1,0 +1,47 @@
+# Internal engineering docs
+
+Granular, module-scoped documentation of how each feature was developed:
+mechanics, invariants, design decisions, testing approach, and gotchas.
+Written by the **documentor** subagent (`.claude/agents/documentor.md`) after
+every card closes; the index below is reconciled by the closing agent.
+
+User-facing docs live in the repo README and the web docs pages
+(`web/src/app/docs/`). Product spec: [PRODUCT_PLAN.md](PRODUCT_PLAN.md).
+
+## Index
+
+### Platform core
+- [modules/repo-harness.md](modules/repo-harness.md) — bootstrap, test harness, hexagonal skeleton (S0.x)
+- [modules/database.md](modules/database.md) — SQLite/Postgres adapters, migrations, RLS (S1.1–S1.2)
+- [modules/profiles.md](modules/profiles.md) — profile schema + service (S1.3)
+- [modules/dedup.md](modules/dedup.md) — dedup engine (S1.4)
+
+### MCP surface
+- [modules/mcp-server.md](modules/mcp-server.md) — entrypoint, tools, wiring (S2.1)
+- [modules/packs.md](modules/packs.md) — packs-as-data: schema, seed, geo packs, board verification (S2.3–S2.6)
+- [modules/hunt.md](modules/hunt.md) — hunt pipeline (S2.4)
+- [modules/generation.md](modules/generation.md) — briefs, assets, ATS coverage, review tools (S3.x)
+- [guidance.md](guidance.md) — client behavioral contract: instructions, prompts, breadcrumbs (S6.5)
+
+### Apply loop
+- [modules/apply.md](modules/apply.md) — state machine, progress loop, consent gate, obstacles, abandon (S4.x, S6.0)
+
+### CV + CLI
+- [modules/cv-parsing.md](modules/cv-parsing.md) — CV parser, progressive Tier 2 (S5.1–S5.2)
+- [modules/cli.md](modules/cli.md) — CLI packaging (S5.3)
+
+### API (Starlette parity API)
+- [api/auth.md](api/auth.md) — magic-link auth, session store (S6.1a–S6.1b)
+- [api/hardening.md](api/hardening.md) — self-host hardening: body cap, TrustedHost, cookie-secure (S6.1c)
+- [api/pipeline.md](api/pipeline.md) — pipeline reads, stats, match detail (S6.6a, S6.9)
+- [api/actions.md](api/actions.md) — match actions, profile mapping, error kinds (S6.6b, S6.10)
+- [api/account.md](api/account.md) — account endpoints, sessions, audit, connection (S6.6c)
+
+### Privacy
+- [modules/privacy.md](modules/privacy.md) — GDPR export/delete (S6.4)
+
+### Web dashboard
+- [modules/web.md](modules/web.md) — Next.js surfaces, fixtures, CI step, merge (W1–W5, S6.3)
+
+### Self-host topology
+- [modules/self-host.md](modules/self-host.md) — compose stack, tenant alignment, connect (S6.8, ADR 0006)

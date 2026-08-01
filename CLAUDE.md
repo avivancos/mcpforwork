@@ -26,8 +26,9 @@ when you change an obligation, mirror it.
    open-core SQLite parity, facts inventory, packs-as-data. `AGENTS.md §1`.
 5. **At close:** targeted tests green → fused review gate
    (`test-code-reviewer`, model: inherit — includes the regression audit) PASS
-   → move card to `done/` → Conventional Commit staging only this task's files
-   by explicit path.
+   → **documentor subagent** updates the module docs under `docs/` → move card
+   to `done/` → Conventional Commit staging only this task's files by explicit
+   path (code + docs + card).
 
 ## Claude Code specifics
 

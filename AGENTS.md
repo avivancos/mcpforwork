@@ -116,6 +116,14 @@ verification gates run (full suite + real smoke test, evidence recorded) ·
 + post-deploy checks passed. A task is not closed merely because code was
 written.
 
+**Documentor step (mandatory at close).** After the gate passes and before
+the closing commit, spawn the documentor subagent
+[.claude/agents/documentor.md](.claude/agents/documentor.md) on the card: it
+writes/updates the granular module docs under `docs/` (how the feature was
+developed, invariants, decisions, gotchas) and fixes drift in docs it
+touches. The docs it writes ride the card's closing commit. The index is
+[docs/README.md](docs/README.md).
+
 ## 7. Commits
 
 - Conventional Commits, on `main`.
