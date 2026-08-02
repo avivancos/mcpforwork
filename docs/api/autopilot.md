@@ -32,8 +32,8 @@ siblings):
 - `GET /v1/autopilot/boards` (app.py:442, route :632) →
   `{"boards": [{slug, name}]}` — packs-registry names for
   `autopilot.safe_source_slugs()`, `sorted()` for stable output (W6.3 gate
-  P3). Honestly EMPTY until S7.2c human-verifies a board and flags its pack
-  `auto_apply_safe` — the dashboard renders its empty state, never a
+  P3). Honestly EMPTY after S7.2c (browser pass flagged no board
+  `auto_apply_safe`) — the dashboard renders its empty state, never a
   fabricated board.
 
 ## Design decisions
@@ -85,5 +85,7 @@ zero mocks):
 - **Revocation is not retroactive** — already-minted L2 authorizations are
   not recalled (see `modules/apply.md`); the dashboard's revoke copy says so
   honestly.
-- **The boards list is empty in production today** — by design, until S7.2c;
-  do not "fix" the empty state by seeding a board.
+- **The boards list is empty in production today** — by design after
+  S7.2c's empty allowlist; do not "fix" the empty state by seeding a
+  board. Re-curate only with a new card + browser evidence
+  (`modules/packs.md`).

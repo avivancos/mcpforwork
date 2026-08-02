@@ -5,8 +5,9 @@
 > `report_apply_progress` is the heartbeat; `request_submit` is THE consent gate
 > (invariant §1.2, §9 P0) — without a recorded consent artifact it always awaits the
 > human; an L1 approval (S7.2a, ADR 0005) or an active L2 policy (S7.2b) turns a
-> re-entry into a one-time `submit_authorized`. Latest first: S7.2d (L2 cap
-> count+flip TOCTOU serialization), S7.2b (L2 recorded policy — write side in
+> re-entry into a one-time `submit_authorized`. Pack `apply_playbook` quirks
+> land in the fill plan (S7.2c). Latest first: S7.2d (L2 cap count+flip TOCTOU
+> serialization), S7.2c (quirks step), S7.2b (L2 recorded policy — write side in
 > `modules/autopilot.md`), W6.2 (dashboard approval UI — `modules/web.md`),
 > S7.2a, S6.0, S4.4–S4.1.
 
@@ -18,13 +19,15 @@ construction** and never gains entry (ADR 0005: authorization is a response-scop
 directive, never a persisted plan step). `ALLOWED_TRANSITIONS` (:19-27): draft→filling→
 awaiting_human→submit_requested→submitted→verified, `abandoned` from every open state;
 submitted/verified/abandoned terminal. `build_steps` (:34) emits the plan: navigate
-(page content flagged UNTRUSTED, :49-51) → fill → upload → optional answer → `review`.
+(page content flagged UNTRUSTED, :49-51) → fill → upload → optional `answer`
+step when `apply_playbook.quirks` is non-empty (`:87-96`, S7.2c) → `review`.
 
 **Service** (`services/apply.py` — `(uow, user_id, ...)`; the caller commits; every
 mutation audited via `audit.record`):
 - `start_application` (:59) — preflight: match approved (:61-65); idempotent re-open
   per finding (:67-81, `_OPEN_STATES` :27); dedup gate (:83-89); daily cap 10/day
-  (:25, :91-93); active profile. Loads the pack playbook, persists `filling`.
+  (:25, :91-93); active profile. Loads the pack `apply_playbook` (quirks /
+  `ats_hint` for the fill plan; absence = L0 unchanged), persists `filling`.
 - `report_apply_progress` (:133) — the heartbeat: reports accepted ONLY while `filling`
   (:147-151), audited BEFORE branching (:159); `ok` advances, last `ok` flips to
   `awaiting_human` via `assert can_transition` (:204); `mismatch` returns a repair

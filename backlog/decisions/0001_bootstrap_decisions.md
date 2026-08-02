@@ -77,11 +77,10 @@ decisions had to be fixed before any code existed.
 
 ## Carried follow-ups (from the S2 final-review gate)
 
-- **[S4 — apply/prefill card]** `apply_playbook` URLs (returned by
-  `source_playbook`) are NOT scheme-validated the way `url_template`/`base_url`
-  now are. No live path today (only the text `ats_hint` is read; nothing opens
-  an apply URL yet). When the client opens an apply URL, scheme-validate it in
-  `domain/packs.validate_pack` the same way.
+- **[CLOSED by S7.2c]** `apply_playbook.form_url_pattern` is now
+  https-only in `domain/packs._validate_apply_playbook` (unknown keys
+  rejected; http/javascript/data rejected). Clients open these URLs;
+  see `docs/modules/packs.md`.
 - **[note, low priority]** Timestamp string shape differs across backends:
   SQLite emits `…Z` (ms, UTC), Postgres emits `…` (µs, no offset, naïve
   TIMESTAMP). Both are valid ISO-8601 and both satisfy consumers today. If a

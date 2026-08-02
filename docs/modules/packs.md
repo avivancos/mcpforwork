@@ -1,10 +1,11 @@
 # Source packs (packs-as-data)
 
-> Versioned YAML DATA that teaches the copilot HOW to search each job site —
-> deployable independently of releases, sector/country logic as data not code
-> (AGENTS.md §1.5). The schema + validator (S2.3), the browser-verified UK/ES
-> geo packs (S2.5), and the `search_box` playbook mode for SPA/Cloudflare
-> boards (S2.6). Cards (latest first): S2.6, S2.5, S2.3.
+> Versioned YAML DATA that teaches the copilot HOW to search (and apply on)
+> each job site — deployable independently of releases; sector/country logic
+> as data not code (AGENTS.md §1.5). Schema + validator (S2.3), browser-verified
+> UK/ES geo packs (S2.5), `search_box` mode for SPA/Cloudflare boards (S2.6),
+> and curated `apply_playbook` + honest-empty `auto_apply_safe` (S7.2c).
+> Cards (latest first): S7.2c, S2.6, S2.5, S2.3.
 
 ## How it works
 
@@ -12,109 +13,111 @@
 (`id`, integer `version`, `kind: global|country|sector`) plus a `sources` list.
 Each source declares `slug`, `name`, `base_url`, ISO-3166 alpha-2 `countries`
 (or `global`), `sectors` (or `any`), `remote`, `tier: free|pro`, `enabled`, a
-`search_playbook`, and an optional `apply_playbook` (`ats_hint`,
-`auto_apply_safe`).
+`search_playbook`, and an optional `apply_playbook`.
+
+**`apply_playbook` contract** (`domain/packs.py` `_APPLY_PLAYBOOK_KEYS` /
+`_validate_apply_playbook`, `:46-74`). Optional mapping; when present, only
+these keys are allowed (unknown keys → validation error):
+
+| Key | Type | Notes |
+|-----|------|--------|
+| `ats_hint` | `str` | Short classifier for clients / hunt `apply_hint` |
+| `quirks` | `list[str]` | Injected into the fill plan as an `answer` step |
+| `form_url_pattern` | `str` | Must start with `https://` (http / javascript / data rejected) |
+| `auto_apply_safe` | `bool` | Consent-relevant: gates L2 via `safe_source_slugs()` |
+
+Absence of the whole playbook = L0 apply behavior unchanged (no quirks step,
+source not L2-eligible). `form_url_pattern` scheme validation closes the
+[ADR 0001](../../backlog/decisions/0001_bootstrap_decisions.md) follow-up —
+load-bearing now that clients open these URLs.
 
 **Schema + validator.** `domain/packs.py` is PURE: `validate_pack(data) ->
-list[str]` (`domain/packs.py:122-147`) returns human-readable errors (empty =
-valid) — required fields, ISO-code shape (`_ISO_ALPHA2`, `:30`), unique slugs,
-enum tiers/kinds, boolean flags. Security invariants: `base_url` and
-`url_template` must be http(s) (`:64-65`, `:96-97`) because the URL is opened
-in the user's browser; `url_template` mode requires a `{query}` placeholder
-(`:101-102`).
+list[str]` (empty = valid) — required fields, ISO shape (`_ISO_ALPHA2`),
+unique slugs, enum tiers/kinds, boolean flags. Security: `base_url` and
+`url_template` must be http(s); `url_template` mode requires `{query}`.
 
-**Two search modes** (`SEARCH_MODES`, `domain/packs.py:29`). `url_template`
-(default): `{query}` is quote_plus-encoded into a navigable URL.
-`search_box`: the template is a plain search PAGE and `result_hint` — required
-to contain `{query}` in this mode (`:103-110`) — tells the client to type the
-query into the board's on-page box. Absent `mode` defaults to `url_template`.
+**Two search modes** (`SEARCH_MODES`, `:29`). `url_template` (default):
+`{query}` is quote_plus-encoded into a navigable URL. `search_box`: the
+template is a plain search PAGE and `result_hint` — required to contain
+`{query}` in this mode (`:134-141`) — tells the client to type into the
+on-page box. Absent `mode` defaults to `url_template`.
 
-**Registry.** `packs/registry.py` loads every shipped pack at import time via
-`load_sources()` (`registry.py:72-86`, `lru_cache(maxsize=1)`), validates each
-(raising `PackError` on any error or cross-pack slug collision — a broken pack
-never ships silently), and maps to the frozen `PackSource` dataclass
-(`registry.py:29-51`). `PackSource.search_url(query)` (`:44-51`) fills the
-template with `quote_plus` in `url_template` mode and returns the page
-unchanged in `search_box` mode. `sources_for(countries, sectors, remote)`
-(`registry.py:95-116`) selects enabled sources by tag overlap; `global`/`any`
-tags match everything, `remote=True/False` filters on the remote flag, `None`
-does not filter.
+**Registry.** `packs/registry.py` loads every shipped pack at import via
+`load_sources()` (`:72-86`, `lru_cache(maxsize=1)`), validates each (raises
+`PackError` on error or cross-pack slug collision), maps to frozen
+`PackSource` (`:29-51`). `PackSource.apply` holds the raw `apply_playbook`
+dict (or `{}`). `search_url(query)` (`:44-51`) fills the template in
+`url_template` mode; returns the page unchanged in `search_box`.
+`sources_for(countries, sectors, remote)` (`:95-116`) selects enabled
+sources by tag overlap (`global`/`any` wildcards; `remote` filters).
 
-**Shipped packs (20 sources).** `global-remote.yaml` v2 — 5 remote boards, ALL
-`search_box` (browser-verified S2.6: none have working URL-param search), with
-a header comment documenting why `remoteok` (paywalled search) and `hnhiring`
-(tag-index, no search box) are NOT shipped. `uk.yaml` (4: indeed-uk, reed,
-adzuna-uk, linkedin-uk), `es.yaml` (5: infojobs, indeed-es, adzuna-es,
-tecnoempleo, linkedin-es), `us.yaml` (3), `de.yaml` (3) — all `url_template`
-mode, query-param style, browser-verified.
+**Shipped packs (20 sources).** `global-remote.yaml` **v3** — 5 remote
+boards, ALL `search_box` (S2.6), each with an `apply_playbook`
+(`auto_apply_safe: false` + quirks/`ats_hint` from the S7.2c browser pass).
+Header comments document why `remoteok` / `hnhiring` are NOT shipped.
+`uk.yaml` (4), `es.yaml` (5), `us.yaml` (3), `de.yaml` (3) —
+`url_template` mode; no apply playbooks yet (aggregators exit to employer
+ATS; not L2 candidates without per-ATS work).
 
-**Consumers.** `services/hunt.py` (`hunt_plan`, `source_playbook`,
-`list_sources`) surfaces `mode` per source; the client-facing breadcrumbs and
-the `/hunt` prompt branch on it (see `docs/modules/hunt.md`,
-`docs/guidance.md`). Since S7.2b, `services/autopilot.py` reads
-`apply_playbook.auto_apply_safe` via `safe_source_slugs()` — the flag now
-GATES the L2 autopilot (policy evaluation + queue + the API's boards list);
-no shipped pack is flagged yet (S7.2c curates which, after human browser
-verification).
+**Consumers.** `hunt_plan` surfaces `apply_hint` (= `ats_hint`);
+`source_playbook` returns the full `apply_playbook`. `start_application`
+loads `PackSource.apply` into `build_steps`, which appends an `answer` step
+when `quirks` is non-empty (`domain/apply_flow.py:87-96`). The `/apply`
+prompt (`server.py`) tells the client to honor those quirks.
+`services/autopilot.safe_source_slugs()` reads `auto_apply_safe` — **S7.2c
+result: allowlist stays empty** (`frozenset()`). Browser evidence (all FAIL
+for L2): Remotive Unlock paywall; WWR Apply→account register; Working Nomads
+→ external Breezy; Himalayas/Jobicy Cloudflare. Card:
+`backlog/done/S7.2c_apply_playbook_packs.md`.
 
 ## Design decisions
 
-- **YAML + `pyyaml`** so community packs are PR-friendly data contributions;
-  the full 155-source donor migration is an ongoing PR task, deliberately NOT
-  a mechanical port of the donor's free-text `cat`/`region` tags (S2.3
-  simplicity gate).
-- **Browser-verified URLs only** (S2.5/S2.6): every shipped `url_template`
-  returned real listings in a real browser. Country aggregators
-  (Indeed/Reed/Adzuna/InfoJobs/Tecnoempleo) are the verified workhorses;
-  dedicated remote boards are SPAs/Cloudflare-gated → `search_box`.
-- **ISO codes, not names**: `GB` not "UK"; the client LLM normalizes
-  user-typed "UK" → `GB` at intake.
-- **`apply_playbook` URL scheme validation deferred** to the S4 apply card
-  (no live path when S2.3 shipped; ADR 0001).
+- **YAML + `pyyaml`** so community packs are PR-friendly; the full donor
+  migration is an ongoing PR task, not a mechanical port of free-text tags
+  (S2.3 simplicity gate).
+- **Browser-verified URLs only** (S2.5/S2.6/S7.2c): search templates and
+  `auto_apply_safe: true` both require human evidence. Conservatism on the
+  L2 flag is the product's risk posture — zero flagged after S7.2c is
+  correct, not incomplete.
+- **ISO codes, not names**: `GB` not "UK"; the client LLM normalizes at intake.
+- **Unknown `apply_playbook` keys rejected** so pack drift fails loudly
+  rather than being silently ignored by clients that open URL fields.
 
 ## Testing
 
-- `tests/test_packs.py` — validator unit cases (missing field, bad country,
-  missing `{query}`, duplicate slug, unknown tier/kind, non-http template AND
-  base_url, non-bool `auto_apply_safe`); every shipped pack loads + validates;
-  `sources_for` selection incl. non-matching-sector exclusion.
-- **Path-SEO guard** (`test_packs.py:113-126`): no shipped `url_template`-mode
-  source may put `{query}` in the URL path — quote_plus encodes space as `+`,
-  which path segments take literally. `search_box` sources are exempt.
-- `search_box` mode tests (`test_packs.py:129-241`): hint required and must
-  name `{query}`, scheme still checked, mode surfaced through `hunt_plan`/
-  `source_playbook`, and a negative test pins `remoteok`/`hnhiring` as
-  not-shipped.
-- `tests/test_geo_packs.py` — GB/ES selection and cross-exclusion, remote
-  filtering, and every geo source renders an http URL containing the exact
-  `quote_plus` output (`data+engineer`).
+- `tests/test_packs.py` — validator (missing field, bad country, missing
+  `{query}`, duplicate slug, unknown tier/kind, non-http template/base_url,
+  non-bool `auto_apply_safe`, apply_playbook unknown keys + https scheme +
+  `ats_hint`/`quirks` types, allowlist guard
+  `test_no_shipped_source_is_auto_apply_safe_without_evidence` with
+  `allowed: frozenset()`, global-remote playbooks ship `safe: false` with
+  non-empty quirks/`ats_hint`); every shipped pack loads; `sources_for`.
+- **Path-SEO guard** (`test_packs.py`): no `url_template`-mode source may put
+  `{query}` in the URL path — quote_plus's `+` breaks path segments.
+  `search_box` exempt.
+- `search_box` mode tests: hint required + `{query}`, scheme still checked,
+  mode through `hunt_plan`/`source_playbook`, negative pin that
+  `remoteok`/`hnhiring` are not shipped.
+- `tests/test_geo_packs.py` — GB/ES selection, remote filter, URL rendering.
+- `tests/test_mcp_server.py` — `/apply` prompt mentions apply_playbook /
+  fill-plan quirks (S7.2c).
 
 ## Gotchas
 
-- **Path-SEO portals break quote_plus** (S2.5): Totaljobs/CV-Library were
-  dropped and the pre-existing `stepstone-de` swapped for `adzuna-de` because a
-  `{query}` in the URL PATH receives `+` literally. The structural guard test
-  above is what makes this class unshippable — it also caught the broken
-  RemoteOK tag-path.
-- **RemoteOK is NOT a working free board** (S2.6 browser evidence): tag-path
-  fails multi-word titles AND the on-page search hard-paywalls ($14.95/mo).
-  Re-adding it would funnel users into a paywall; the negative test pins the
-  decision.
-- **A search-page template without `mode: search_box` fails validation** — the
-  default `url_template` mode demands `{query}` in the URL, so the realistic
-  authoring mistake fails loud instead of shipping a dead source
-  (`test_packs.py:184-193`).
-- **Surfacing `mode` is inert unless the client is told to branch on it** (S2.6
-  gate P2): the breadcrumbs, `SERVER_INSTRUCTIONS`, and `/hunt` prompt all
-  mention `search_box`, pinned by
-  `test_hunt_guidance_tells_the_client_to_use_the_search_box_when_mode_says_so`.
-- **`load_sources` is `lru_cache`d** — tests that write pack files must not
-  assume a re-read within one process.
-- **Flagging `auto_apply_safe: true` is a consent-relevant act** (S7.2b): the
-  moment a pack ships it, L2 policies can authorize submits on that board
-  without per-application approval. S7.2c sets it ONLY after human browser
-  verification of a native, login-free, non-hostile apply flow — expect few;
-  that conservatism is the product's risk posture.
-- **Open P3s (carded for the community-pack ingestion sprint):** `result_hint`
-  is client-facing untrusted text (injection-shaped content is possible) and an
-  unhashable `mode` value raises `TypeError` instead of a validation error.
+- **Path-SEO portals break quote_plus** (S2.5): structural guard makes this
+  class unshippable (also caught RemoteOK's tag-path).
+- **RemoteOK is NOT a working free board** (S2.6): tag-path + hard paywall;
+  negative test pins the decision.
+- **A search-page template without `mode: search_box` fails validation** —
+  default `url_template` demands `{query}` in the URL.
+- **Surfacing `mode` is inert unless the client branches on it** (S2.6):
+  breadcrumbs / `SERVER_INSTRUCTIONS` / `/hunt` mention `search_box`.
+- **`load_sources` is `lru_cache`d** — pack-file tests must not assume a
+  re-read within one process.
+- **Flagging `auto_apply_safe: true` is consent-relevant** (S7.2b/c): L2
+  policies can then authorize submits on that board without per-app approval.
+  Re-curate only with a new card + browser evidence; do not invent boards
+  to "fix" empty L2 queue / boards list.
+- **Open P3s (community-pack sprint):** `result_hint` is untrusted
+  client-facing text; an unhashable `mode` raises `TypeError` instead of a
+  validation error.

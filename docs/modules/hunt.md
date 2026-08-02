@@ -4,7 +4,8 @@
 > per-source search playbooks the client LLM browses in the user's own browser;
 > ingest the findings it extracts (deduped across BOTH application stores,
 > scored against the profile, persisted); surface the matches. The server never
-> browses — it choreographs. Built by S2.4; `mode` surfacing added by S2.6.
+> browses — it choreographs. Built by S2.4; `mode` surfacing added by S2.6;
+> `apply_hint` / full `apply_playbook` from packs (S7.2c).
 
 ## How it works
 
@@ -19,9 +20,11 @@ FK to it.
 → query = first two target titles → `registry.sources_for` filtered by
 work_auth_countries / sectors / `_wants_remote` (`hunt.py:35-43`: `["remote"]`
 → True, no "remote" → False, mixed → None) → per-source
-`{slug, name, mode, search_url, result_hint, apply_hint}`. No profile →
-`{error}`. `source_playbook(slug, query)` (`hunt.py:75-90`) and
-`list_sources(countries, sectors)` (`hunt.py:93-107`) are pack-only — no DB.
+`{slug, name, mode, search_url, result_hint, apply_hint}` where
+`apply_hint` is `PackSource.apply["ats_hint"]` when present. No profile →
+`{error}`. `source_playbook(slug, query)` (`hunt.py:75-90`) returns the full
+`apply_playbook` dict alongside search fields; `list_sources(countries,
+sectors)` (`hunt.py:93-107`) is pack-only — no DB.
 
 **Ingest.** `submit_findings(uow, user_id, source_slug, findings)`
 (`hunt.py:110-203`). Per finding: skip non-mapping items, blank titles, and

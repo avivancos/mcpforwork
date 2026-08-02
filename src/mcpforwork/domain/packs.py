@@ -43,6 +43,37 @@ def _check_string_list(src: Mapping[str, Any], field: str, where: str) -> list[s
     return []
 
 
+_APPLY_PLAYBOOK_KEYS = frozenset({"ats_hint", "quirks", "form_url_pattern", "auto_apply_safe"})
+
+
+def _validate_apply_playbook(apply_pb: Any, where: str) -> list[str]:
+    """Shape + https scheme for apply_playbook (S7.2c / ADR 0001 follow-up).
+
+    Clients open form_url_pattern URLs, so scheme validation is load-bearing —
+    javascript:/data:/http: must never reach the browser. Unknown keys are
+    rejected so pack drift fails loudly rather than being silently ignored.
+    """
+    if not isinstance(apply_pb, Mapping):
+        return [f"{where}.apply_playbook must be a mapping"]
+    errors: list[str] = []
+    unknown = sorted(set(apply_pb) - _APPLY_PLAYBOOK_KEYS)
+    if unknown:
+        errors.append(f"{where}.apply_playbook has unknown keys {unknown}")
+    if "ats_hint" in apply_pb and not isinstance(apply_pb["ats_hint"], str):
+        errors.append(f"{where}.apply_playbook.ats_hint must be a string")
+    if "quirks" in apply_pb:
+        quirks = apply_pb["quirks"]
+        if not isinstance(quirks, list) or not all(isinstance(q, str) for q in quirks):
+            errors.append(f"{where}.apply_playbook.quirks must be a list of strings")
+    if "form_url_pattern" in apply_pb:
+        pattern = apply_pb["form_url_pattern"]
+        if not isinstance(pattern, str) or not pattern.startswith("https://"):
+            errors.append(f"{where}.apply_playbook.form_url_pattern must be an https URL")
+    if "auto_apply_safe" in apply_pb and not isinstance(apply_pb["auto_apply_safe"], bool):
+        errors.append(f"{where}.apply_playbook.auto_apply_safe must be a boolean")
+    return errors
+
+
 def _validate_source(src: Any, where: str, seen_slugs: set[str]) -> list[str]:
     if not isinstance(src, Mapping):
         return [f"{where} must be a mapping"]
@@ -111,10 +142,7 @@ def _validate_source(src: Any, where: str, seen_slugs: set[str]) -> list[str]:
 
     apply_pb = src.get("apply_playbook")
     if apply_pb is not None:
-        if not isinstance(apply_pb, Mapping):
-            errors.append(f"{where}.apply_playbook must be a mapping")
-        elif "auto_apply_safe" in apply_pb and not isinstance(apply_pb["auto_apply_safe"], bool):
-            errors.append(f"{where}.apply_playbook.auto_apply_safe must be a boolean")
+        errors.extend(_validate_apply_playbook(apply_pb, where))
 
     return errors
 

@@ -84,7 +84,7 @@ wire shapes (`http.ts:58-69` — PUT sends snake_case `min_score`/`max_per_day`;
 GET returns camelCase via the API's `_policy_json`; see `api/autopilot.md`).
 Fixtures mirror real semantics (`fixtures.ts:274-285,322-339`): a revoked
 policy is history, not state (`getAutopilotPolicy` returns null); boards are
-honestly `[]` until S7.2c; put/revoke prepend audit entries. Server actions
+honestly `[]` after S7.2c (no pack flagged `auto_apply_safe`); put/revoke prepend audit entries. Server actions
 `saveAutopilotPolicy`/`revokeAutopilotPolicy` (`actions.ts:48-66`) re-validate
 ranges server-side (`isInt`; 0–100 / 1–50 mirroring the API — public POST
 endpoints never trust the client) and revalidate `/account/autopilot`. The
@@ -236,5 +236,5 @@ Fixtures remain the dev default and opt-in public-demo mode.
 - **The `autopilot_l2` consent chip is reachable since S7.2b/W6.3** — an
   L2-authorized application carries `consent_level` 2, which the seam maps to
   `"autopilot_l2"` (pipeline `_CONSENT`, see `api/pipeline.md`). No shipped pack
-  is `auto_apply_safe` yet, so in practice the chip appears only once S7.2c
-  flags a board.
+  is `auto_apply_safe` after S7.2c, so in practice the chip appears only once
+  a future curation card flags a board.

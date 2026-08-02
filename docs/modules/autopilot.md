@@ -6,7 +6,8 @@
 > agent tool calls (possibly prompt-injected by posting content) can mint
 > consent. Reads live in `services/apply.py`, which evaluates the artifacts
 > inside `request_submit` (see `modules/apply.md` for the gate itself).
-> Cards (latest first): S7.2b (L2 policy + queue), S7.2a (L1 approval).
+> Cards (latest first): S7.2c (pack `auto_apply_safe` curation — honest
+> empty allowlist), S7.2b (L2 policy + queue), S7.2a (L1 approval).
 
 ## How it works
 
@@ -56,8 +57,9 @@ row; re-approve is idempotent (`already_approved`); audited.
   items: []}`; no safe sources → policy plus honestly empty items.
 - **`safe_source_slugs()`** (:143) — slugs whose pack flags
   `apply_playbook.auto_apply_safe` (`packs/registry.load_sources`).
-  Honestly EMPTY until S7.2c human-verifies a board — the conservative
-  default is the product's risk posture.
+  Honestly EMPTY after the S7.2c browser pass (none of the five
+  global-remote boards qualified — see `modules/packs.md`); the
+  conservative default is the product's risk posture.
 
 **CI consent-write gate** (`.github/workflows/ci.yml:43-57`): two greps
 fail the build if a consent write appears outside this one file —
@@ -125,14 +127,16 @@ fail the build if a consent write appears outside this one file —
   the cap re-check, `apply.py:404-407`), so an agent is never stranded
   mid-submit. The dashboard's revoke copy says this honestly (W6.3).
 - **The queue is only as honest as the packs**: no shipped pack is
-  `auto_apply_safe` yet, so both adapters return empty items today —
-  pinned by `test_queue_defaults_to_empty_when_no_shipped_pack_is_flagged`
-  (:262) and the boards route test. S7.2c curates the flag after human
-  browser verification.
+  `auto_apply_safe` (S7.2c verified five boards and flagged none), so both
+  adapters return empty items — pinned by
+  `test_queue_defaults_to_empty_when_no_shipped_pack_is_flagged` (:262),
+  the boards route test, and the packs allowlist guard (`frozenset()`).
+  A future curation card must record browser evidence before any slug
+  enters the allowlist.
 - **PG "UTC day" inherits the server TZ** (pre-existing ADR 0001 shape;
   Docker/CI default is UTC): the SQLite cap window is pinned UTC by the
-  injected-`now` test, but live-PG cap-hit/midnight coverage is an S7.2c
-  follow-up once a real source is flagged safe.
+  injected-`now` test; live-PG cap-hit/midnight coverage against a real
+  safe source waits until a future card flags one.
 - **`put_policy` binds `enabled` as a Python bool** — binding 1/0 instead
   would work on SQLite and fail on psycopg's BOOLEAN column; the live arm
   is what guards this class.

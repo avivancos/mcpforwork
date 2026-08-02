@@ -1,6 +1,6 @@
 pack:
   id: global-remote
-  version: 2
+  version: 3
   kind: global
   title: Global remote-first job boards
 
@@ -15,6 +15,10 @@ pack:
 # uses `search_playbook.mode: search_box`: the template is the board's search
 # PAGE and result_hint tells the client to type {query} into the on-page box (the
 # human clears any Cloudflare check first via the unblock_source flow).
+#
+# S7.2c apply verification (real browser, DO NOT submit): NONE qualify for
+# auto_apply_safe. Evidence on backlog card S7.2c. Playbooks below document
+# quirks for L0/L1; auto_apply_safe stays false (honest empty L2 allowlist).
 #
 # NOT shipped, with reasons (verified S2.5/S2.6):
 #   - remoteok: tag-path (remote-{tag}-jobs) takes quote_plus's "+" literally AND
@@ -35,6 +39,12 @@ sources:
       mode: search_box
       url_template: "https://remotive.com/remote-jobs"
       result_hint: "SPA — no URL search. Type '{query}' into the on-page search box, then read the result cards (each links to the posting)."
+    apply_playbook:
+      ats_hint: paywall_or_external
+      quirks:
+        - "Many postings show an Unlock / paywall before a usable apply form"
+        - "Not auto_apply_safe — no native login-free form verified (S7.2c)"
+      auto_apply_safe: false
 
   - slug: weworkremotely
     name: We Work Remotely
@@ -48,6 +58,14 @@ sources:
       mode: search_box
       url_template: "https://weworkremotely.com/remote-jobs"
       result_hint: "Type '{query}' into the on-page search box. Results group by category; each card links to the posting."
+    apply_playbook:
+      ats_hint: account_gate
+      form_url_pattern: "https://weworkremotely.com/job-seekers/account/register"
+      quirks:
+        - "Apply now redirects to job-seeker account registration (login wall)"
+        - "Cookie consent banner may cover controls before apply"
+        - "Not auto_apply_safe — account required (S7.2c)"
+      auto_apply_safe: false
 
   - slug: himalayas
     name: Himalayas
@@ -61,6 +79,12 @@ sources:
       mode: search_box
       url_template: "https://himalayas.app/jobs"
       result_hint: "Cloudflare-gated — the human clears the check first. Then type '{query}' into the on-page search box; use the country filter for work-authorization."
+    apply_playbook:
+      ats_hint: cloudflare_gated
+      quirks:
+        - "Cloudflare challenge blocks automated browsing; human must clear first"
+        - "Not auto_apply_safe — hostile gate (S7.2c / S2.6)"
+      auto_apply_safe: false
 
   - slug: jobicy
     name: Jobicy
@@ -74,6 +98,12 @@ sources:
       mode: search_box
       url_template: "https://jobicy.com"
       result_hint: "Cloudflare-gated — the human clears the check first. Then type '{query}' into the on-page search box."
+    apply_playbook:
+      ats_hint: cloudflare_gated
+      quirks:
+        - "Cloudflare challenge blocks automated browsing; human must clear first"
+        - "Not auto_apply_safe — hostile gate (S7.2c / S2.6)"
+      auto_apply_safe: false
 
   - slug: workingnomads
     name: Working Nomads
@@ -87,3 +117,10 @@ sources:
       mode: search_box
       url_template: "https://www.workingnomads.com/jobs"
       result_hint: "SPA — no URL search. Type '{query}' into the on-page search box (or use the Category filter), then read the listing."
+    apply_playbook:
+      ats_hint: external_ats_redirect
+      form_url_pattern: "https://www.workingnomads.com/job/go/"
+      quirks:
+        - "Apply for this position → /job/go/{id}/ redirects off-site to employer ATS (e.g. Breezy)"
+        - "Not auto_apply_safe — no native on-board form (S7.2c)"
+      auto_apply_safe: false

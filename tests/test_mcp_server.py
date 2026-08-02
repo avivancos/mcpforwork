@@ -57,6 +57,9 @@ def test_apply_prompt_covers_the_full_orchestration_loop() -> None:
     assert "confirm_submitted" in prompt
     assert "human" in lowered
     assert "clicks submit" in lowered or "never click submit" in lowered
+    # S7.2c: fill-plan quirks from apply_playbook must stay in the prompt.
+    assert "quirks" in lowered
+    assert "apply_playbook" in lowered or "fill plan" in lowered
 
 
 def test_hunt_guidance_tells_the_client_to_use_the_search_box_when_mode_says_so() -> None:

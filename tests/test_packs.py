@@ -101,6 +101,75 @@ def test_non_bool_auto_apply_safe_is_rejected() -> None:
     assert any("auto_apply_safe" in e for e in validate_pack(bad))
 
 
+def test_apply_playbook_rejects_unknown_keys() -> None:
+    # Clients open playbook fields — unknown keys are silent drift.
+    bad = copy.deepcopy(_VALID)
+    bad["sources"][0]["apply_playbook"] = {"ats_hint": "greenhouse", "iframe_selector": "#x"}
+    errors = validate_pack(bad)
+    assert any("unknown" in e.lower() and "iframe_selector" in e for e in errors)
+
+
+def test_apply_playbook_form_url_pattern_must_be_https() -> None:
+    # ADR 0001 follow-up: scheme validation is load-bearing once clients open
+    # playbook URLs (javascript:/data: must never reach the browser).
+    bad = copy.deepcopy(_VALID)
+    bad["sources"][0]["apply_playbook"] = {"form_url_pattern": "http://a.example.com/apply"}
+    assert any("https" in e for e in validate_pack(bad))
+    worse = copy.deepcopy(_VALID)
+    worse["sources"][0]["apply_playbook"] = {"form_url_pattern": "javascript:alert(1)"}
+    assert any("https" in e for e in validate_pack(worse))
+
+
+def test_apply_playbook_accepts_the_known_shape() -> None:
+    good = copy.deepcopy(_VALID)
+    good["sources"][0]["apply_playbook"] = {
+        "ats_hint": "native",
+        "quirks": ["Apply button is below the fold", "No cover-letter field"],
+        "form_url_pattern": "https://a.example.com/jobs/*/apply",
+        "auto_apply_safe": False,
+    }
+    assert validate_pack(good) == []
+
+
+def test_apply_playbook_ats_hint_and_quirks_types() -> None:
+    bad_hint = copy.deepcopy(_VALID)
+    bad_hint["sources"][0]["apply_playbook"] = {"ats_hint": 12}
+    assert any("ats_hint" in e for e in validate_pack(bad_hint))
+    bad_quirks = copy.deepcopy(_VALID)
+    bad_quirks["sources"][0]["apply_playbook"] = {"quirks": "one quirk"}
+    assert any("quirks" in e for e in validate_pack(bad_quirks))
+    bad_item = copy.deepcopy(_VALID)
+    bad_item["sources"][0]["apply_playbook"] = {"quirks": ["ok", 3]}
+    assert any("quirks" in e for e in validate_pack(bad_item))
+
+
+def test_no_shipped_source_is_auto_apply_safe_without_evidence() -> None:
+    # Conservatism: auto_apply_safe is a consent-relevant flag. Until a human
+    # browser-verifies a board on this card, none of the shipped packs may
+    # claim it — an accidental true would authorize L2 submits.
+    flagged = [
+        slug
+        for slug, src in registry.load_sources().items()
+        if src.apply.get("auto_apply_safe") is True
+    ]
+    # The allowlist below is filled ONLY with boards whose verification
+    # evidence is recorded on backlog/done/S7.2c. Empty is the honest default
+    # after the S7.2c browser pass (Remotive paywall, WWR account gate,
+    # Himalayas/Jobicy Cloudflare, Working Nomads external ATS redirect).
+    allowed: frozenset[str] = frozenset()
+    assert set(flagged) <= allowed, f"unverified auto_apply_safe sources: {flagged}"
+
+
+def test_global_remote_boards_ship_apply_playbooks_with_safe_false() -> None:
+    # S7.2c curated quirks for L0/L1 even when none are L2-safe.
+    sources = registry.load_sources()
+    for slug in ("remotive", "weworkremotely", "himalayas", "jobicy", "workingnomads"):
+        apply = sources[slug].apply
+        assert apply.get("auto_apply_safe") is False, slug
+        assert isinstance(apply.get("quirks"), list) and apply["quirks"], slug
+        assert isinstance(apply.get("ats_hint"), str) and apply["ats_hint"], slug
+
+
 def test_sources_for_excludes_a_non_matching_sector() -> None:
     # germantechjobs is tagged sectors:[tech]; a healthcare query must not select
     # it, but a tech query must.

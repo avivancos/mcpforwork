@@ -22,7 +22,9 @@ The MCP server never browses and never calls an LLM. The client agent reads
 4. `/apply` — `get_generation_brief` → draft → `submit_asset` →
    `ats_coverage_check` → `start_application` → `report_apply_progress` /
    `resolve_field` → `request_submit` → its decision rules who clicks Submit
-   (L0: the human; L1/L2: the agent, once) → `confirm_submitted`.
+   (L0: the human; L1/L2: the agent, once) → `confirm_submitted`. Honor
+   portal quirks listed in the fill plan (from the source `apply_playbook`,
+   S7.2c).
 
 ## Consent invariant (L0/L1/L2 — S7.2)
 
@@ -61,6 +63,7 @@ ADR-0005 provenance — see `modules/privacy.md`.
 
 `tests/test_mcp_server.py` asserts: every registered tool has a breadcrumb;
 instructions state zero-LLM + never-auto-submit; no stale "later sprint"
-claims; `/apply` prompt names the full orchestration verbs.
+claims; `/apply` prompt names the full orchestration verbs and mentions
+apply_playbook / fill-plan quirks (S7.2c).
 `tests/test_privacy.py` pins the two-step tool signature (no boolean
 `confirm` path).
