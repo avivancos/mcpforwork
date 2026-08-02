@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
-import json
 import sys
 from urllib.parse import urlsplit, urlunsplit
 
 from mcpforwork import config
 from mcpforwork.adapters.db import connect
+from mcpforwork.entrypoints.cli import connect as connect_cmd
 
 
 def _redact(url: str) -> str:
@@ -24,13 +24,6 @@ def _redact(url: str) -> str:
     return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
-_SNIPPET = {
-    "mcpServers": {
-        "mcpforwork": {"command": "uvx", "args": ["--from", "mcpforwork", "mcpforwork-mcp"]}
-    }
-}
-
-
 def _init() -> int:
     """Create the data dir, migrate the self-host SQLite db, print the connector snippet."""
     config.data_dir().mkdir(parents=True, exist_ok=True)
@@ -38,7 +31,11 @@ def _init() -> int:
     uow.close()
     print(f"Initialized {_redact(config.db_url())}")
     print("\nAdd the connector to Claude Code / Desktop (.mcp.json):\n")
-    print(json.dumps(_SNIPPET, indent=2))
+    # Single source of truth: the same block `connect --client claude-code` prints.
+    print(connect_cmd.render("claude-code", "local").split("\n", 1)[1])
+    print("\nOther clients (Cursor, Codex, OpenCode) or compose mode:")
+    print("  mcpforwork connect                 # all clients, local stdio")
+    print("  mcpforwork connect --mode compose  # HTTP against docker compose")
     print("\nThen run /setup in your client to build your profile (< 3 minutes).")
     return 0
 
@@ -60,6 +57,18 @@ def _version() -> int:
     return 0
 
 
+def _connect(client: str | None, mode: str) -> int:
+    """Print the MCP client config block(s). Print-only — never writes the
+    user's config files (their editor, their paste)."""
+    try:
+        out = connect_cmd.render_all(mode) if client is None else connect_cmd.render(client, mode)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(out)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="mcpforwork",
@@ -69,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("init", help="create the local database and print the connector snippet")
     sub.add_parser("serve", help="run the MCP server over stdio")
     sub.add_parser("version", help="print the version")
+    connect_parser = sub.add_parser(
+        "connect", help="print the MCP client config for your agent client"
+    )
+    connect_parser.add_argument("--client", choices=connect_cmd.CLIENTS, default=None)
+    connect_parser.add_argument("--mode", choices=connect_cmd.MODES, default="local")
     args = parser.parse_args(argv)
     if args.command == "init":
         return _init()
@@ -76,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
         return _serve()
     if args.command == "version":
         return _version()
+    if args.command == "connect":
+        return _connect(args.client, args.mode)
     parser.print_usage(sys.stderr)
     return 2
 
