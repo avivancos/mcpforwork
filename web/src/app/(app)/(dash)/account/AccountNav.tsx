@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import styles from "./account.module.css";
 
 const ITEMS = [
+  { href: "/account/autopilot", label: "Autopilot" },
   { href: "/account/billing", label: "Billing" },
   { href: "/account/data", label: "Data & privacy" },
   { href: "/account/sessions", label: "Sessions" },

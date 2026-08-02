@@ -9,7 +9,11 @@ import styles from "./dash.module.css";
 export const dynamic = "force-dynamic";
 
 export default async function DashLayout({ children }: { children: React.ReactNode }) {
-  const [connection, subscription] = await Promise.all([api.getConnection(), api.getSubscription()]);
+  const [connection, subscription, policy] = await Promise.all([
+    api.getConnection(),
+    api.getSubscription(),
+    api.getAutopilotPolicy(),
+  ]);
 
   return (
     <div className={styles.shell}>
@@ -22,9 +26,13 @@ export default async function DashLayout({ children }: { children: React.ReactNo
           <div className={styles.autonomyCard}>
             <span className={styles.autonomyLabel}>Autonomy</span>
             <span className={styles.autonomyState}>
-              <span className="dot dot--ok" /> Supervised
+              <span className="dot dot--ok" /> {policy ? "Autopilot L2" : "Supervised"}
             </span>
-            <span className={styles.autonomyHint}>You click Submit. Autopilot: coming later.</span>
+            <span className={styles.autonomyHint}>
+              {policy
+                ? `Auto-submits on verified-safe boards · score ≥ ${policy.minScore} · ≤ ${policy.maxPerDay}/day.`
+                : "You click Submit — or enable autopilot in Account."}
+            </span>
           </div>
           <span className={styles.trialLine}>
             {subscription.price === "self-host" ? (

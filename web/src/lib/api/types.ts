@@ -104,6 +104,21 @@ export interface AuditEntry {
   event: string;
 }
 
+/** L2 policy (S7.2b). null = autopilot off, every submit is the human's. */
+export interface AutopilotPolicy {
+  enabled: boolean;
+  minScore: number;
+  maxPerDay: number;
+  createdAt: string; // ISO-8601 across the seam; humanized at render
+  revokedAt: string | null;
+}
+
+/** A board whose pack flags it auto_apply_safe (S7.2c curates which). */
+export interface AutopilotBoard {
+  slug: string;
+  name: string;
+}
+
 /** Display labels for the consent union — the single vocabulary both the
  * pipeline table and the match detail render (W6.2). */
 export const CONSENT_LABELS: Record<NonNullable<PipelineItem["consent"]>, string> = {
@@ -122,6 +137,9 @@ export interface Api {
   getSubscription(): Promise<Subscription>;
   listSessions(): Promise<SessionInfo[]>;
   listAudit(): Promise<AuditEntry[]>;
+  getAutopilotPolicy(): Promise<AutopilotPolicy | null>;
+  /** Boards flagged auto_apply_safe in the packs registry — never hardcoded. */
+  getAutopilotBoards(): Promise<AutopilotBoard[]>;
 
   /** Stripe checkout/portal session — returns null until S7.1 lands (fixtures). */
   createBillingSession(kind: "checkout" | "portal"): Promise<{ url: string | null }>;
@@ -134,6 +152,12 @@ export interface Api {
    * submits.
    */
   approveSubmit(applicationId: string): Promise<void>;
+  /**
+   * L2 consent write (ADR 0005): record/replace the autopilot policy. The
+   * only place a policy is minted — the MCP entrypoint is read-only.
+   */
+  putAutopilotPolicy(policy: { minScore: number; maxPerDay: number }): Promise<void>;
+  revokeAutopilotPolicy(): Promise<void>;
   restoreMatch(id: string): Promise<void>;
   recordOutcome(id: string, outcome: Outcome): Promise<void>;
   updateProfile(patch: Partial<Profile>): Promise<void>;

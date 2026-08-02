@@ -39,6 +39,32 @@ export async function restoreMatch(id: string): Promise<void> {
   revalidatePath(`/matches/${id}`);
 }
 
+// Server actions are public POST endpoints — validate the policy here rather
+// than trust the client (same posture as updateProfile). Ranges mirror the
+// API's own validation (S7.2b): score 0–100, cap 1–50; JSON booleans are not
+// integers.
+const isInt = (x: unknown): x is number => typeof x === "number" && Number.isInteger(x);
+
+export async function saveAutopilotPolicy(policy: {
+  minScore: number;
+  maxPerDay: number;
+}): Promise<void> {
+  const { minScore, maxPerDay } = policy;
+  if (!isInt(minScore) || minScore < 0 || minScore > 100) {
+    throw new Error("minScore must be an integer 0–100");
+  }
+  if (!isInt(maxPerDay) || maxPerDay < 1 || maxPerDay > 50) {
+    throw new Error("maxPerDay must be an integer 1–50");
+  }
+  await api.putAutopilotPolicy({ minScore, maxPerDay });
+  revalidatePath("/account/autopilot");
+}
+
+export async function revokeAutopilotPolicy(): Promise<void> {
+  await api.revokeAutopilotPolicy();
+  revalidatePath("/account/autopilot");
+}
+
 export async function recordOutcome(id: string, outcome: Outcome): Promise<void> {
   await api.recordOutcome(id, outcome);
   revalidatePath("/pipeline");

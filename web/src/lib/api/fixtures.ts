@@ -8,6 +8,7 @@
 import type {
   Api,
   AuditEntry,
+  AutopilotPolicy,
   Connection,
   MatchDetail,
   Outcome,
@@ -220,6 +221,7 @@ interface FixtureStore {
   rows: Row[];
   sessions: SessionInfo[];
   audit: AuditEntry[];
+  autopilotPolicy: AutopilotPolicy | null;
 }
 
 const g = globalThis as typeof globalThis & { __mcpforworkFixtures?: FixtureStore };
@@ -228,6 +230,7 @@ const store: FixtureStore = (g.__mcpforworkFixtures ??= {
   rows: rowsSeed,
   sessions: sessionsSeed,
   audit: auditSeed,
+  autopilotPolicy: null,
 });
 const { profile, rows, sessions, audit: accountAudit } = store;
 
@@ -268,6 +271,17 @@ export const fixturesApi: Api = {
   async listAudit() {
     return accountAudit;
   },
+  async getAutopilotPolicy() {
+    // Mirrors the real API: a revoked policy is history, not state.
+    return store.autopilotPolicy && store.autopilotPolicy.revokedAt === null
+      ? store.autopilotPolicy
+      : null;
+  },
+  async getAutopilotBoards() {
+    // No pack is human-verified auto_apply_safe yet (S7.2c) — the honest
+    // answer is the empty list, same as the real API serves today.
+    return [];
+  },
 
   async createBillingSession() {
     // Stripe is an S7.1 gap — the UI states this honestly instead of faking a flow.
@@ -303,6 +317,25 @@ export const fixturesApi: Api = {
         at: isoAgo(0),
         event: `approve_submit — ${r.role}, ${r.company}`,
       });
+    }
+  },
+  async putAutopilotPolicy({ minScore, maxPerDay }) {
+    store.autopilotPolicy = {
+      enabled: true,
+      minScore,
+      maxPerDay,
+      createdAt: isoAgo(0),
+      revokedAt: null,
+    };
+    accountAudit.unshift({
+      at: isoAgo(0),
+      event: `autopilot_policy recorded — min score ${minScore}, cap ${maxPerDay}/day`,
+    });
+  },
+  async revokeAutopilotPolicy() {
+    if (store.autopilotPolicy && store.autopilotPolicy.revokedAt === null) {
+      store.autopilotPolicy.revokedAt = isoAgo(0);
+      accountAudit.unshift({ at: isoAgo(0), event: "autopilot_policy revoked — submits are yours" });
     }
   },
   async restoreMatch(id) {

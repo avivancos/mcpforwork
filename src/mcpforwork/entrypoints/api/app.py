@@ -32,6 +32,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from mcpforwork import config
 from mcpforwork.adapters.db import connect
 from mcpforwork.adapters.mailer import ConsoleMailer
+from mcpforwork.packs import registry
 from mcpforwork.ports.mailer import Mailer
 from mcpforwork.services import apply as apply_service
 from mcpforwork.services import (
@@ -387,11 +388,23 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
 
     # --- Autopilot policy (L2 consent writes — ADR 0005: human session only) #
 
+    def _policy_json(policy: dict | None) -> dict | None:
+        """The web seam is camelCase end-to-end (like PipelineItem)."""
+        if policy is None:
+            return None
+        return {
+            "enabled": bool(policy["enabled"]),
+            "minScore": policy["min_score"],
+            "maxPerDay": policy["max_per_day"],
+            "createdAt": policy["created_at"],
+            "revokedAt": policy["revoked_at"],
+        }
+
     async def get_policy_route(request: Request) -> Response:
         with _authed(request) as (uow, auth):
             if auth is None:
                 return _unauthorized()
-            return _JSON({"policy": autopilot.get_policy(uow, auth["uid"])})
+            return _JSON({"policy": _policy_json(autopilot.get_policy(uow, auth["uid"]))})
 
     async def put_policy_route(request: Request) -> Response:
         """L2 consent write: record a new autopilot policy. The ONLY place a
@@ -425,6 +438,17 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
             if response.status_code == 204:
                 uow.commit()
             return response
+
+    async def boards_route(request: Request) -> Response:
+        with _authed(request) as (uow, auth):
+            if auth is None:
+                return _unauthorized()
+            sources = registry.load_sources()
+            boards = [
+                {"slug": slug, "name": sources[slug].name}
+                for slug in sorted(autopilot.safe_source_slugs())
+            ]
+            return _JSON({"boards": boards})
 
     async def restore_match_route(request: Request) -> Response:
         return await _match_action(request, review.restore_match)
@@ -605,6 +629,7 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         Route("/v1/autopilot/policy", get_policy_route, methods=["GET"]),
         Route("/v1/autopilot/policy", put_policy_route, methods=["PUT"]),
         Route("/v1/autopilot/policy/revoke", revoke_policy_route, methods=["POST"]),
+        Route("/v1/autopilot/boards", boards_route, methods=["GET"]),
         Route("/v1/matches/{id}/discard", discard_match_route, methods=["POST"]),
         Route("/v1/matches/{id}/restore", restore_match_route, methods=["POST"]),
         Route("/v1/matches/{id}/outcome", record_outcome_route, methods=["POST"]),

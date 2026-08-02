@@ -29,6 +29,8 @@ export function httpApi(rawBase: string): Api {
   const get = <T>(p: string) => call<T>(base, p);
   const post = <T>(p: string, body?: unknown) =>
     call<T>(base, p, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+  const put = <T>(p: string, body: unknown) =>
+    call<T>(base, p, { method: "PUT", body: JSON.stringify(body) });
 
   // 404 → null, matching the fixtures adapter and the MatchDetail | null
   // signature (a missing match is not an error the page should throw on).
@@ -53,12 +55,18 @@ export function httpApi(rawBase: string): Api {
     getSubscription: () => get("/v1/subscription"),
     listSessions: () => get("/v1/sessions"),
     listAudit: () => get("/v1/audit"),
+    getAutopilotPolicy: async () => (await get<{ policy: import("./types").AutopilotPolicy | null }>("/v1/autopilot/policy")).policy,
+    getAutopilotBoards: async () => (await get<{ boards: import("./types").AutopilotBoard[] }>("/v1/autopilot/boards")).boards,
 
     createBillingSession: (kind) => post("/v1/billing/session", { kind }),
     approveMatch: (id) => post(`/v1/matches/${encodeURIComponent(id)}/approve`),
     discardMatch: (id) => post(`/v1/matches/${encodeURIComponent(id)}/discard`),
     approveSubmit: (applicationId) =>
       post(`/v1/applications/${encodeURIComponent(applicationId)}/approve-submit`),
+    // The API route takes snake_case; the seam is camelCase end-to-end.
+    putAutopilotPolicy: ({ minScore, maxPerDay }) =>
+      put("/v1/autopilot/policy", { min_score: minScore, max_per_day: maxPerDay }),
+    revokeAutopilotPolicy: () => post("/v1/autopilot/policy/revoke"),
     restoreMatch: (id) => post(`/v1/matches/${encodeURIComponent(id)}/restore`),
     recordOutcome: (id, outcome) => post(`/v1/matches/${encodeURIComponent(id)}/outcome`, { outcome }),
     updateProfile: (patch) => post("/v1/profile", patch),

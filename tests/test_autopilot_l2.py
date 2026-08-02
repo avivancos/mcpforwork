@@ -501,6 +501,19 @@ def test_policy_routes_require_a_session(tmp_path: Path, monkeypatch: pytest.Mon
     )
     assert client.post("/v1/autopilot/policy/revoke").status_code == 401
     assert client.get("/v1/autopilot/policy").status_code == 401
+    assert client.get("/v1/autopilot/boards").status_code == 401
+
+
+def test_boards_route_lists_only_flagged_safe_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Until S7.2c human-verifies a board, the list is honestly empty — the
+    dashboard renders its empty state, never a fabricated board."""
+    client = _client(tmp_path, monkeypatch)
+    _login(client)
+    res = client.get("/v1/autopilot/boards")
+    assert res.status_code == 200
+    assert res.json() == {"boards": []}
 
 
 def test_policy_routes_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -515,7 +528,9 @@ def test_policy_routes_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         == 204
     )
     on = client.get("/v1/autopilot/policy").json()["policy"]
-    assert on["min_score"] == 75 and on["max_per_day"] == 3 and on["revoked_at"] is None
+    # The web seam is camelCase end-to-end (like PipelineItem); the API maps.
+    assert on["minScore"] == 75 and on["maxPerDay"] == 3 and on["revokedAt"] is None
+    assert on["createdAt"] and on["enabled"] in (True, 1)
 
     assert client.post("/v1/autopilot/policy/revoke").status_code == 204
     assert client.get("/v1/autopilot/policy").json()["policy"] is None

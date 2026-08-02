@@ -191,3 +191,28 @@
   white-space: nowrap;
   min-width: 110px;
 }
+
+.policyForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-label);
+  width: 100%;
+  max-width: 280px;
+}
+
+.input {
+  border: 1px solid var(--border-input);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  background: var(--card);
+}
