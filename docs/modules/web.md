@@ -147,5 +147,4 @@ and opt-in public-demo mode (hosted $5 pitch + `url: null` degrade).
 - **Reproducible builds:** no `new Date()`/`Date.now()` in legal/sitemap —
   "Last updated" is a passed-in static string.
 - **robots.txt is advisory, not access control** (W4.1 P3); `(app)` confidentiality
-  depends on server-side auth. `global-error.tsx` hardcodes light-theme hex
-  (replaces the root layout).
+  is server-side auth. `global-error.tsx` hardcodes light hex (replaces root layout).
