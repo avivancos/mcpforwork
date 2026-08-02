@@ -2,8 +2,9 @@
 
 > Read side of the dashboard: `GET /v1/pipeline`, `GET /v1/pipeline/stats`,
 > `GET /v1/matches/{id}`, plus the `pipeline_stats` MCP tool — one service,
-> two thin wrappers. Built by S6.9 (read windows: SQL aggregation + audit
-> pre-filter), S6.6a (service + routes + MCP tool).
+> two thin wrappers. Built by W6.2 (consent vocabulary + `applicationId` seam),
+> S6.9 (read windows: SQL aggregation + audit pre-filter), S6.6a (service +
+> routes + MCP tool).
 
 ## How it works
 
@@ -11,44 +12,48 @@
 owns the transaction). Contract source of truth: `web/src/lib/api/types.ts` —
 ISO-8601 timestamps, string ids; the web humanizes at render.
 
-- `derive_stage(finding_status, application)` (pipeline.py:47) — the PURE
+- `derive_stage(finding_status, application)` (pipeline.py:50) — the PURE
   stage mapping and single source of the stage vocabulary: `discarded` wins
   even with an application; an outcome maps via `_OUTCOME_STAGES`
   (pipeline.py:25, `no_reply`→`no_response`, `hired`→`offer` — the web has no
   hired chip); `awaiting_human`/`submit_requested` → `awaiting_you`;
   `draft`/`filling` → `filling`; `submitted`/`verified` pass through;
   `abandoned` falls back to `new_match`.
-- `_latest_applications` (pipeline.py:68) — finding_id → newest application
+- `_latest_applications` (pipeline.py:71) — finding_id → newest application
   row in ONE query (`MAX(id)` per finding, joined back), both dialects.
-- `list_pipeline` (pipeline.py:107) — PipelineItem[] best-score-first
-  (`LIMIT 200`, pipeline.py:100). `_item` (pipeline.py:80) sets
-  `consent: "supervised"` only while an application is active (non-abandoned),
-  `updated` from the application when active else the finding's `last_seen`,
-  and `needsYou` (reason per application state, `_NEEDS_YOU` pipeline.py:34)
-  only on `awaiting_you`.
-- `pipeline_stats` (pipeline.py:169) — counts aggregated IN SQL over ALL the
-  user's findings (`_STAGE_COUNTS_SQL`, pipeline.py:143): no row window.
-  `_STAGE_CASE_SQL` (pipeline.py:125) is the SQL mirror of `derive_stage`;
+- `list_pipeline` (pipeline.py:112, `limit = 200` default) — PipelineItem[]
+  best-score-first. `_item` (pipeline.py:83), only while an application is
+  active (non-abandoned): `consent` maps the application's `consent_level` via
+  `_CONSENT` (pipeline.py:40 — 0 supervised · 1 autopilot_l1 · 2 autopilot_l2,
+  unknown → supervised; W6.2), `applicationId` carries the active application's
+  id (pipeline.py:95 — the approve-submit action's target; the web renders the
+  button only when it is non-null), `updated` comes from the application else
+  the finding's `last_seen`, and `needsYou` (reason per application state,
+  `_NEEDS_YOU` pipeline.py:34) only on `awaiting_you`.
+- `pipeline_stats` (pipeline.py:174) — counts aggregated IN SQL over ALL the
+  user's findings (`_STAGE_COUNTS_SQL`, pipeline.py:148): no row window.
+  `_STAGE_CASE_SQL` (pipeline.py:130) is the SQL mirror of `derive_stage`;
   `foundThisWeek` counts new_match rows with `first_seen >= week_start`, where
-  `_iso_ms_z` (pipeline.py:112) formats the boundary in the exact shape
+  `_iso_ms_z` (pipeline.py:117) formats the boundary in the exact shape
   SQLite's strftime defaults write (fixed-width ms + `Z`), so lexicographic
   text comparison IS chronological on SQLite and PG coerces the same string to
   TIMESTAMP. Buckets: `newMatches`, `needsYou`, `submitted` (with `verified`),
   `responses` (`count`/`of`/`interviews` via the stage sets at
-  pipeline.py:40-44). `now` is injectable.
-- `get_match_detail` (pipeline.py:190) — MatchDetail or None when the finding
+  pipeline.py:43-46). `now` is injectable.
+- `get_match_detail` (pipeline.py:195) — MatchDetail or None when the finding
   is not the caller's (cross-tenant reads are indistinguishable from missing;
-  the web's `getOrNull` maps 404 → null). Composes the item plus pack slug,
-  posting URL, `constraintChecks` from the score breakdown, a dedup line, and
-  generated assets. `employmentType` is `""` — not stored on findings, never
-  fabricated. Audit events come from `audit_log` filtered by `user_id`
-  explicitly (audit_log is NOT RLS-forced — ADR 0001 ledger; that filter is
-  the tenant wall) with a finding-scoped LIKE PRE-FILTER (pipeline.py:205-218)
-  keyed on the exact `"key": value` shape `json.dumps` writes
-  (`%"finding_id": N%` plus `%"application_id": N%` when an application
-  exists); `_finding_audit` (pipeline.py:244) then applies the exact per-row
-  Python filter, so over-matches (finding_id 51 vs 5) are rejected and no
-  event is ever crowded out by unrelated audit volume.
+  the web's `getOrNull` maps 404 → null). Composes the item BY SPREAD
+  (`**_item`, pipeline.py:227 — `applicationId`/`consent` inherit
+  automatically) plus pack slug, posting URL, `constraintChecks` from the
+  score breakdown, a dedup line, and generated assets. `employmentType` is
+  `""` — not stored on findings, never fabricated. Audit events come from
+  `audit_log` filtered by `user_id` explicitly (audit_log is NOT RLS-forced —
+  ADR 0001 ledger; that filter is the tenant wall) with a finding-scoped LIKE
+  PRE-FILTER (pipeline.py:210-223) keyed on the exact `"key": value` shape
+  `json.dumps` writes (`%"finding_id": N%` plus `%"application_id": N%` when an
+  application exists); `_finding_audit` (pipeline.py:249) then applies the
+  exact per-row Python filter, so over-matches (finding_id 51 vs 5) are
+  rejected and no event is ever crowded out by unrelated audit volume.
 
 **Routes** — `src/mcpforwork/entrypoints/api/app.py`: the three GETs
 (app.py:406-429), all behind `_authed`; `get_match` returns 404 for unknown OR
@@ -83,6 +88,10 @@ mocks):
 - Contract shape: pipeline mirrors types.ts, no consent badge without an
   application, stats count the derived stages, match detail composes assets +
   audit, 404 for unknown/foreign, cross-tenant list isolation.
+- W6.2 seam: `test_an_awaiting_you_item_exposes_the_application_id` (pipeline
+  AND match detail carry the id; the no-application case pins
+  `applicationId is None`) and `test_an_l1_approved_application_reads_autopilot_l1`
+  (`consent_level` 1 → `"autopilot_l1"` across the seam).
 - Tenant wall: `test_match_detail_audit_never_leaks_another_users_rows` is
   adversarial — the foreign row references the CALLER's finding, so only the
   SQL user_id filter stands (both dialects via `any_uow`).
@@ -108,7 +117,7 @@ mocks):
   would evade the pre-filter. The exact Python filter still protects
   correctness of what IS matched, but events could be missed; keep audit
   writes on the default `json.dumps` (as `services/audit.py` does).
-- `list_pipeline` still caps at 200 findings (pipeline.py:107) — fine at MVP
+- `list_pipeline` still caps at 200 findings (pipeline.py:112) — fine at MVP
   scale; revisit with pagination.
 - An early `_iso_ms_z` draft used `%f` (microseconds) where seconds belonged —
   SQLite accepted the malformed text silently, PG's timestamp cast rejected

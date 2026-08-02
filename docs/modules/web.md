@@ -3,8 +3,8 @@
 > The `web/` app: marketing landing, docs site, legal/SEO pages, and the
 > dashboard — a **mirror and control panel, never a workspace** (ADR 0002).
 > Built API-contract-first on a typed seam, shipped on fixtures, live against
-> the real parity API in compose since W6.1. Cards (latest first): W2.2, W6.1,
-> S6.3, W5.2, W5.1, W4.1, W3.1, W2.1, W1.2, W1.1.
+> the real parity API in compose since W6.1. Cards (latest first): W6.2, W2.2,
+> W6.1, S6.3, W5.2, W5.1, W4.1, W3.1, W2.1, W1.2, W1.1.
 
 ## How it works
 
@@ -49,6 +49,23 @@ mailer, so "we'll email a link" would be a lie — and `DataActions.tsx:18-29`
 downloads it as a Blob; `DeleteAccount` (`DataActions.tsx:49-65`) states deletion
 is immediate on self-host. Hosted checkout: `createBillingSession` → `isSafeBillingUrl`
 guard (https + Stripe host allowlist, `safeRedirect.ts:9`); `url: null` → honest "not wired up" note.
+
+**L1 approval UI (W6.2).** The dashboard is the L1 control panel (ADR 0005: the
+human-session API is the ONLY consent-write path — the UI approves, it never fills
+or submits). The seam carries the vocabulary: `PipelineItem.consent` widens to
+`"supervised" | "autopilot_l1" | "autopilot_l2" | null` (`types.ts:35`) and gains
+`applicationId` (`types.ts:37`) — the approve action targets the APPLICATION, not
+the finding. `CONSENT_LABELS` (`types.ts:109`) is the single display map both the
+pipeline chip (`PipelineTable.tsx:174`) and the match detail (`page.tsx:52-58`)
+render. `Api.approveSubmit` (`types.ts:136`) → `POST /v1/applications/{id}/approve-submit`
+(`http.ts:60`); the fixtures mirror is honest about ADR 0005 (`fixtures.ts:291`):
+it records the audit event but does NOT flip stage/consent — the agent's
+`request_submit` consumes the approval (see `modules/apply.md`). Server action
+`approveSubmit(applicationId, findingId)` (`actions.ts:30`) revalidates `/pipeline`
++ `/matches/[id]`. `MatchActions.tsx:33-55` renders "Approve submit" only when
+`stage === "awaiting_you" && applicationId`, with explicit copy of what approval
+authorizes (one submit, one application, recorded in the audit log); "Review in
+Claude" demotes to `btn--secondary` when the button shows.
 
 **Docs (W2.1 + W2.2).** Route-per-page under a shared `DocsShell` + `_nav.ts`: the
 `DocSlug` literal union (`_nav.ts:11`) makes a slug typo a compile error; `DOCS_ORDER`
@@ -97,6 +114,17 @@ Fixtures remain the dev default and opt-in public-demo mode.
 - **Truthful copy per deployment mode (W6.1).** Self-host has no mailer, Stripe,
   or hosted plan; the UI says so ($0 card, inline export download, immediate
   deletion) rather than promise hosted-track behavior.
+- **Approval recorded, never consumed by the API (W6.2, ADR 0005).** Approving
+  writes `submit_approved_at/via` but leaves the row `awaiting_you` with
+  `consent_level` 0; the agent's `request_submit` re-entry flips 0→1 ATOMICALLY
+  (exactly-once — see `modules/apply.md`). The dashboard can therefore never show
+  a false "approved" state that a crashed agent would strand.
+- **One consent vocabulary (W6.2).** `CONSENT_LABELS` is keyed on
+  `NonNullable<PipelineItem["consent"]>` — a new consent level without a label is
+  a compile error, so chip and detail can never drift apart.
+- **Multi-select approve deliberately skipped (W6.2).** The card allowed it only
+  as a thin loop over single-approve; rule of two — wait for the second concrete
+  need.
 - **Docs never fabricate (W2.2).** The fused gate's first run FAILED with 6 P1 accuracy
   defects: wrong `MCPFORWORK_USER_EMAIL` default (the email keys the self-host tenant's
   users row — a wrong default splits tenant data), wrong API host/port defaults, an
@@ -122,6 +150,14 @@ Fixtures remain the dev default and opt-in public-demo mode.
 - Per-card gates: `npm run build` + `tsc --noEmit` + `check:no-llm-deps` +
   browser verification (W6.1 added a compose e2e gate). W2.2: build green with
   all 7 new routes static; browser-verified (200s, zero "coming soon", badge 38).
+- W6.2: 10/10 node tests, tsc/build/guard green; compose e2e —
+  `POST /v1/applications/1/approve-submit` → 204 twice (idempotent), artifact
+  columns + `approve_submit` audit rows written, `consent_level` still 0 and
+  state still `submit_requested` until the agent's `request_submit` consumed the
+  approval; browser-verified chip flip to "Autopilot L1" after consumption.
+  Python-side seam tests in `tests/test_pipeline_api.py` (see `api/pipeline.md`).
+  Fused gate PASS; mutant probes killed: consent always-supervised,
+  applicationId always-null.
 - Guard mutant probe (W1.1): crafted manifests killed — direct dep, transitive
   lock entry, `@google/genai`, npm-alias `npm:openai@4`; no false positives.
 - Python-side: `tests/test_compose_stack.py` asserts compose web points at the
@@ -148,3 +184,8 @@ Fixtures remain the dev default and opt-in public-demo mode.
   passed in); robots.txt is advisory, not access control (W4.1 P3); `global-error.tsx` hardcodes light hex.
 - **Docs drift is real (W2.2):** the `_nav.ts` mcp-tools badge (38) duplicates
   the server's `@mcp.tool()` count by hand — a drift-guard test is uncarded.
+- **Fixtures `approveSubmit` is a silent no-op in the wrong state** (W6.2 P3,
+  accepted): the real API 400s, but the honest UI never offers the button outside
+  `awaiting_you`, so the divergence is unreachable.
+- **The `autopilot_l2` copy branch in match detail is unreachable until S7.2b**
+  (W6.2 P3) — the L2 policy write path does not exist yet; revisit there.

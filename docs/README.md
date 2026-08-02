@@ -24,7 +24,7 @@ User-facing docs live in the repo README and the web docs pages
 - [guidance.md](guidance.md) — client behavioral contract: instructions, prompts, breadcrumbs (S6.5)
 
 ### Apply loop
-- [modules/apply.md](modules/apply.md) — state machine, progress loop, consent gate, obstacles, abandon (S4.x, S6.0)
+- [modules/apply.md](modules/apply.md) — state machine, progress loop, consent gate, L1 approval loop, obstacles, abandon (S4.x, S6.0, S7.2a)
 
 ### CV + CLI
 - [modules/cv-parsing.md](modules/cv-parsing.md) — CV parser, progressive Tier 2 (S5.1–S5.2)
@@ -33,7 +33,7 @@ User-facing docs live in the repo README and the web docs pages
 ### API (Starlette parity API)
 - [api/auth.md](api/auth.md) — magic-link auth, session store (S6.1a–S6.1b)
 - [api/hardening.md](api/hardening.md) — self-host hardening: body cap, TrustedHost, cookie-secure (S6.1c)
-- [api/pipeline.md](api/pipeline.md) — pipeline reads, stats, match detail (S6.6a, S6.9)
+- [api/pipeline.md](api/pipeline.md) — pipeline reads, stats, match detail, consent seam (S6.6a, S6.9, W6.2)
 - [api/actions.md](api/actions.md) — match actions, profile mapping, error kinds (S6.6b, S6.10)
 - [api/account.md](api/account.md) — account endpoints, sessions, audit, connection (S6.6c)
 
@@ -41,7 +41,7 @@ User-facing docs live in the repo README and the web docs pages
 - [modules/privacy.md](modules/privacy.md) — GDPR export/delete (S6.4)
 
 ### Web dashboard
-- [modules/web.md](modules/web.md) — Next.js surfaces, fixtures, CI step, merge (W1–W5, S6.3)
+- [modules/web.md](modules/web.md) — Next.js surfaces, fixtures, CI step, merge, L1 approval UI (W1–W6, S6.3)
 
 ### Self-host topology
 - [modules/self-host.md](modules/self-host.md) — compose stack, tenant alignment, connect (S6.8, ADR 0006)

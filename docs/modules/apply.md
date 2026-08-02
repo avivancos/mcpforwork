@@ -5,7 +5,8 @@
 > `report_apply_progress` is the heartbeat; `request_submit` is THE consent gate
 > (invariant §1.2, §9 P0) — without a recorded consent artifact it always awaits the
 > human; an L1 approval (S7.2a, ADR 0005) turns a re-entry into a one-time
-> `submit_authorized`. Latest first: S7.2a, S6.0, S4.4–S4.1.
+> `submit_authorized`. Latest first: W6.2 (dashboard approval UI — the UI half
+> of L1, documented in `modules/web.md`), S7.2a, S6.0, S4.4–S4.1.
 
 ## How it works
 
@@ -71,6 +72,8 @@ consent. The loop:
 1. `POST /v1/applications/{id}/approve-submit` (`entrypoints/api/app.py:360-376`,
    route :563) — session-auth (magic-link cookie), 404 cross-tenant, structured error
    kinds (S6.10). The ONLY consent-write surface; MCP has no equivalent tool.
+   The dashboard's "Approve submit" button (W6.2 — see `modules/web.md`) is the
+   human-facing surface of this route.
 2. `autopilot.approve_submit` (`services/autopilot.py:23`) — state-guarded to
    `awaiting_human|submit_requested` (`_APPROVABLE_STATES` :20, the dashboard's
    "awaiting you" stage — no human/agent race); writes `submit_approved_at/via`;
