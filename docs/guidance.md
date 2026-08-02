@@ -12,10 +12,13 @@ The MCP server never browses and never calls an LLM. The client agent reads
 - [`src/mcpforwork/entrypoints/mcp/server.py`](../src/mcpforwork/entrypoints/mcp/server.py)
   — `@mcp.prompt` definitions.
 
-## Shipped default flow (S6.5)
+## Shipped default flow (S6.5; `/setup` CV-first since S5.3)
 
-1. `/setup` — profile (Tier 1 + progressive Tier 2), `parse_cv`, achievements,
-   style.
+1. `/setup` — CV-first: paste CV → `parse_cv` (contact + `setup_hints`) →
+   CONFIRM contact and proposed focus (titles/seniority/sectors from
+   `cv_text` + hints; client LLM proposes, human confirms) →
+   `update_profile` → progressive Tier 2 via `profile_gaps` /
+   `add_achievements` / `set_style_profile`. Server never invents.
 2. `/hunt` — `hunt_plan` → browser extract (honor `mode: search_box`) →
    `submit_findings` → `list_matches`.
 3. `/review` — human decides `approve_match` / `discard_match`.
@@ -25,6 +28,16 @@ The MCP server never browses and never calls an LLM. The client agent reads
    (L0: the human; L1/L2: the agent, once) → `confirm_submitted`. Honor
    portal quirks listed in the fill plan (from the source `apply_playbook`,
    S7.2c).
+
+### `/setup` + `parse_cv` breadcrumbs (S5.3)
+
+`SERVER_INSTRUCTIONS` step 1 (`guidance.py:17-18`) names the CV-first chain
+explicitly. The `parse_cv` breadcrumb (`guidance.py:52-58`) tells the client:
+None = ask; review `setup_hints` (empty = unknown); propose focus from
+`cv_text` + hints; CONFIRM; then `update_profile` with confirmed values +
+`cv_text`. The `/setup` prompt (`server.py:645-668`) mirrors that order —
+`parse_cv` before gap-filling; Tier 2 is one gap at a time, never a form-wall.
+`parse_cv` remains read-only (details: `modules/cv-parsing.md`).
 
 ## Consent invariant (L0/L1/L2 — S7.2)
 
@@ -64,6 +77,7 @@ ADR-0005 provenance — see `modules/privacy.md`.
 `tests/test_mcp_server.py` asserts: every registered tool has a breadcrumb;
 instructions state zero-LLM + never-auto-submit; no stale "later sprint"
 claims; `/apply` prompt names the full orchestration verbs and mentions
-apply_playbook / fill-plan quirks (S7.2c).
+apply_playbook / fill-plan quirks (S7.2c); `/setup` is CV-first and names
+`setup_hints` (S5.3).
 `tests/test_privacy.py` pins the two-step tool signature (no boolean
 `confirm` path).

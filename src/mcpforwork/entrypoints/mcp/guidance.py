@@ -14,8 +14,8 @@ SERVER_INSTRUCTIONS = (
     "never browses, fetches, scrapes, or calls an LLM. Never auto-submit: you "
     "draft and fill, the human reviews and submits at L0 (the consent invariant).\n\n"
     "Default flow:\n"
-    "1. /setup — build the profile (get_profile / update_profile / "
-    "add_achievements / set_style_profile / parse_cv).\n"
+    "1. /setup — CV-first: parse_cv (contact + setup_hints) → CONFIRM focus → "
+    "update_profile / add_achievements / set_style_profile / profile_gaps.\n"
     "2. /hunt — hunt_plan returns per-source search playbooks (each with a "
     "`mode`); open each in your browser — for `search_box` sources type the query "
     "into the on-page box — extract postings, submit_findings (deduped + scored), "
@@ -50,8 +50,12 @@ _NEXT_ACTIONS: dict[str, str] = {
     "import_from_url_findings": "get_profile to review the merged fields.",
     "profile_gaps": "Offer the FIRST gap conversationally; persist via update_profile.",
     "parse_cv": (
-        "CONFIRM the extracted fields with the human (None = ask, never invent), "
-        "then update_profile with the confirmed values + cv_text."
+        "CONFIRM contact fields with the human (None = ask, never invent). "
+        "Review setup_hints (work_modes, employment_types, skills_top, signals) — "
+        "empty means unknown. Propose target_titles / seniority / sectors from "
+        "cv_text + hints (you are the client LLM), CONFIRM the focus, then "
+        "update_profile with the confirmed values + cv_text. Never invent "
+        "values the human rejected."
     ),
     "hunt_plan": (
         "For each source open its search_url in YOUR browser. If mode is "

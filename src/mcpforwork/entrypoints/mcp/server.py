@@ -644,22 +644,27 @@ def delete_my_data(confirm_token: str = "") -> str:
 
 @mcp.prompt(name="setup")
 def setup_session() -> str:
-    """The /setup interview: build the Tier-1 profile in under 3 minutes."""
+    """The /setup interview: CV-first focus, then fill remaining Tier-1 gaps."""
     return (
-        "Interview the user to build their profile (target < 3 minutes):\n"
-        "1. Ask for: name+email, country+city, work-authorization countries (+ "
-        "sponsorship y/n), 1-5 target job titles + sector(s), seniority, employment "
-        "types, work modes (+ relocation), minimum salary (PRIVATE - never disclosed "
-        "in materials), languages, and their CV (paste text or a LinkedIn URL).\n"
-        "2. Persist with update_profile (one call with the whole patch). For a "
-        "LinkedIn/GitHub/portfolio URL: open it in the user's browser, extract "
+        "Build the profile CV-first (target < 3 minutes):\n"
+        "1. Ask the human to PASTE their CV text (or share a LinkedIn/GitHub/"
+        "portfolio URL). For a URL: open it in the user's browser, extract "
         "structured fields, and call import_from_url_findings(url, fields).\n"
-        "3. For pasted CV text call parse_cv first (zero-LLM extraction), CONFIRM "
-        "the fields with the user, then persist.\n"
-        "4. Offer Tier 2 progressively: call profile_gaps and raise ONE gap at a "
+        "2. For pasted CV text call parse_cv first (zero-LLM extraction). It "
+        "returns candidate contact fields + setup_hints (work_modes, "
+        "employment_types, skills_top, signals) + cv_text. Empty hints = "
+        "unknown — never invent on the server.\n"
+        "3. CONFIRM contact fields with the human. Using cv_text + setup_hints, "
+        "propose 1-5 target_titles, sector(s), seniority, and any B2B/invoice "
+        "narrative from signals — CONFIRM the focus before persisting.\n"
+        "4. Persist with update_profile (one call): confirmed contact + focus + "
+        "cv_text + employment_types/work_modes from confirmed hints. Ask only "
+        "for gaps still missing (country/city, work-authorization + sponsorship "
+        "y/n, relocation, PRIVATE min salary, languages).\n"
+        "5. Offer Tier 2 progressively: call profile_gaps and raise ONE gap at a "
         "time when contextually useful (add_achievements is the highest-leverage "
         "input; set_style_profile captures the voice). Never a form-wall.\n"
-        "Never invent values; only persist what the user actually said."
+        "Never invent values; only persist what the user confirmed."
     )
 
 

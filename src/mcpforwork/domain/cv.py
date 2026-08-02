@@ -4,11 +4,16 @@ Ported from startup-jobs-radar's regex parser. Pure stdlib; low-confidence
 fields come back as None so the client asks the human instead of inventing.
 There is deliberately NO LLM path here: the client LLM (already paid by the
 user) does any richer interpretation and confirms with the human.
+
+S5.3 adds evidence-only `setup_hints` (work modes, employment types, top
+allowlisted skills, signals) so /setup can focus without inventing titles or
+seniority on the server.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 # Bounded quantifiers: an unbounded `[\w.+-]+@` backtracks quadratically over a
 # long non-@ run of word chars (a ReDoS on the arbitrary text parse_cv accepts).
@@ -19,11 +24,110 @@ _URL_RE = re.compile(r"https?://\S+")
 
 # A CV over this size is pathological, not a résumé — the parse_cv tool rejects it.
 MAX_CV_CHARS = 200_000
+_MAX_SKILLS_TOP = 12
 _LINKEDIN_RE = re.compile(r"https?://(?:www\.)?linkedin\.com/\S+", re.IGNORECASE)
 _GITHUB_RE = re.compile(r"https?://(?:www\.)?github\.com/\S+", re.IGNORECASE)
 _NAME_LABEL_RE = re.compile(r"^\s*name\s*[:\-]\s*(.+)$", re.IGNORECASE)
 _SECTION_HEADER_RE = re.compile(
     r"^\s*(EXPERIENCE|EDUCATION|SKILLS|WORK|SUMMARY|PROFILE|PROJECTS|ABOUT)\b", re.IGNORECASE
+)
+
+# Evidence-only modality → existing WorkMode / EmploymentType enums.
+# Patterns are bounded; matches must be word-ish (not inventing from noise).
+_WORK_MODE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("remote", re.compile(r"\b(?:remote|wfh)\b", re.IGNORECASE)),
+    ("hybrid", re.compile(r"\bhybrid\b", re.IGNORECASE)),
+    ("onsite", re.compile(r"\b(?:on[\s\-]?site|onsite)\b", re.IGNORECASE)),
+)
+_EMPLOYMENT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("contract", re.compile(r"\bcontract(?:ing|or|s)?\b", re.IGNORECASE)),
+    ("freelance", re.compile(r"\bfree[\s\-]?lanc(?:e|er|ing)\b", re.IGNORECASE)),
+    ("full_time", re.compile(r"\bfull[\s\-]?time\b", re.IGNORECASE)),
+    ("part_time", re.compile(r"\bpart[\s\-]?time\b", re.IGNORECASE)),
+)
+# Not EmploymentType enums — surface as signals only.
+_SIGNAL_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("b2b", re.compile(r"\bb2b\b", re.IGNORECASE)),
+    ("invoice", re.compile(r"\binvoice(?:able|s|d)?\b", re.IGNORECASE)),
+)
+
+# YAGNI-sized tech allowlist — whole-word hits only; never free-text invention.
+_SKILL_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "python",
+        "fastapi",
+        "django",
+        "flask",
+        "llm",
+        "llms",
+        "mcp",
+        "langchain",
+        "langgraph",
+        "agents",
+        "agentic",
+        "openai",
+        "anthropic",
+        "transformers",
+        "pytorch",
+        "tensorflow",
+        "numpy",
+        "pandas",
+        "docker",
+        "kubernetes",
+        "k8s",
+        "aws",
+        "gcp",
+        "azure",
+        "terraform",
+        "postgres",
+        "postgresql",
+        "sqlite",
+        "redis",
+        "rabbitmq",
+        "kafka",
+        "graphql",
+        "rest",
+        "grpc",
+        "typescript",
+        "javascript",
+        "node",
+        "react",
+        "nextjs",
+        "rust",
+        "go",
+        "golang",
+        "java",
+        "kotlin",
+        "swift",
+        "rag",
+        "vector",
+        "embeddings",
+        "chromadb",
+        "pinecone",
+        "weaviate",
+        "pytest",
+        "cicd",
+        "github",
+        "gitlab",
+        "linux",
+        "bash",
+        "sql",
+        "nosql",
+        "spark",
+        "airflow",
+        "mlops",
+        "ml",
+        "nlp",
+        "cv",
+        "vision",
+        "selenium",
+        "playwright",
+    }
+)
+# Precompiled whole-word patterns per allowlisted skill (bounded token).
+_SKILL_RES: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (skill, re.compile(rf"\b{re.escape(skill)}\b", re.IGNORECASE))
+    for skill in sorted(_SKILL_ALLOWLIST)
 )
 
 
@@ -67,8 +171,54 @@ def _extract_name(header: list[str]) -> str | None:
     return None
 
 
+def _extract_setup_hints(cv_text: str) -> dict:
+    """Evidence-only setup focus. Empty lists = unknown; never invent titles."""
+    work_modes: list[str] = []
+    employment_types: list[str] = []
+    signals: list[str] = []
+
+    for mode, pattern in _WORK_MODE_PATTERNS:
+        if pattern.search(cv_text):
+            work_modes.append(mode)
+            signals.append(f"keyword: {mode}")
+    for emp, pattern in _EMPLOYMENT_PATTERNS:
+        if pattern.search(cv_text):
+            employment_types.append(emp)
+            signals.append(f"keyword: {emp}")
+    for label, pattern in _SIGNAL_PATTERNS:
+        if pattern.search(cv_text):
+            signals.append(f"keyword: {label}")
+
+    counts: Counter[str] = Counter()
+    for skill, pattern in _SKILL_RES:
+        n = len(pattern.findall(cv_text))
+        if n:
+            # Normalize plural-ish aliases to a canonical display token.
+            canonical = {
+                "llms": "llm",
+                "postgresql": "postgres",
+                "golang": "go",
+                "k8s": "kubernetes",
+            }.get(skill, skill)
+            counts[canonical] += n
+
+    skills_top = [
+        skill
+        for skill, _ in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[
+            :_MAX_SKILLS_TOP
+        ]
+    ]
+
+    return {
+        "work_modes": work_modes,
+        "employment_types": employment_types,
+        "skills_top": skills_top,
+        "signals": signals,
+    }
+
+
 def extract_profile_from_cv(cv_text: str) -> dict:
-    """Parse CV text into profile-shaped fields. None = low confidence."""
+    """Parse CV text into profile-shaped fields. None / [] = low confidence."""
     header = _header_block(cv_text)
 
     email_match = _EMAIL_RE.search(cv_text)  # contact info may sit at the bottom
@@ -102,5 +252,6 @@ def extract_profile_from_cv(cv_text: str) -> dict:
             "github": _strip_trailing_punct(github.group(0)) if github else None,
             "portfolio": portfolio,  # already stripped in the loop above
         },
+        "setup_hints": _extract_setup_hints(cv_text),
         "cv_text": cv_text,
     }
