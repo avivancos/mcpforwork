@@ -4,17 +4,17 @@
 > client (Claude Code / Desktop) connects to with zero account. Thin wiring
 > only — each tool opens a tenant-scoped UnitOfWork, calls a service, and
 > returns JSON with a `next_action` breadcrumb. Built by S2.1; later shaped by
-> S3.x/S4.x tools, the S4.4 `_tenant_uow` simplifier, S6.5 guidance, and the
-> S6.8 tenant alignment (ADR 0006).
+> S3.x/S4.x tools, the S4.4 `_tenant_uow` simplifier, S6.5 guidance, the
+> S6.8 tenant alignment (ADR 0006), and the S7.2 consent tools.
 
 ## How it works
 
 **Server.** One module-level `mcp = FastMCP("mcpforwork", instructions=SERVER_INSTRUCTIONS)`
-(`src/mcpforwork/entrypoints/mcp/server.py:41`). 38 `@mcp.tool()` functions
+(`src/mcpforwork/entrypoints/mcp/server.py:41`). 40 `@mcp.tool()` functions
 return `json.dumps(...)` strings; 4 `@mcp.prompt` functions (`/setup`,
-`/review`, `/apply`, `/hunt`, `server.py:613-690`) are the client behavioral
+`/review`, `/apply`, `/hunt`, `server.py:638-715`) are the client behavioral
 contracts. `main()` runs `mcp.run(transport=os.environ.get("MCPFORWORK_TRANSPORT",
-"stdio"))` (`server.py:693`); console script `mcpforwork-mcp`
+"stdio"))` (`server.py:718`); console script `mcpforwork-mcp`
 (`pyproject.toml:39`), dependency `mcp>=1.2` (`pyproject.toml:10`).
 
 **Per-call tenant seam.** `_uow()` (`server.py:83-92`): `connect(config.db_url())`
@@ -41,8 +41,17 @@ SQLite returns strings). Errors are `{"error": msg}` via `_fail`
 
 **Guidance module.** `entrypoints/mcp/guidance.py` is dependency-free by
 import-linter contract (`pyproject.toml:123-134`): `SERVER_INSTRUCTIONS`
-(`guidance.py:11-31`) is the server-level prompt; `next_action(tool)`
-(`guidance.py:99-101`) reads a static dict. Full coverage: `docs/guidance.md`.
+(`guidance.py:11-38`) is the server-level prompt; `next_action(tool)`
+(`guidance.py:117-119`) reads a static dict. Full coverage: `docs/guidance.md`.
+
+**Consent tools are READ-ONLY (S7.2, ADR 0005).** `get_autopilot_policy`
+(`server.py:381`) and `autopilot_queue` (`server.py:391`) expose the L2 policy
+and its work queue; `approve_submit` has NO MCP equivalent. A structural test
+(`tests/test_autopilot_l2.py:589`) pins that the write function names
+(`put_policy`/`revoke_policy`/`approve_submit`) never appear in this
+entrypoint — no tool sequence, however prompt-injected, can mint consent.
+Writes live behind the human-session API (see `docs/modules/autopilot.md`,
+`docs/api/autopilot.md`).
 
 **Config.** `src/mcpforwork/config.py` is resolved on every call (never
 cached): `db_url()` (`config.py:21-27`, env `MCPFORWORK_DB_URL`, default

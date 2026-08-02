@@ -3,8 +3,8 @@
 > The `web/` app: marketing landing, docs site, legal/SEO pages, and the
 > dashboard — a **mirror and control panel, never a workspace** (ADR 0002).
 > Built API-contract-first on a typed seam, shipped on fixtures, live against
-> the real parity API in compose since W6.1. Cards (latest first): W6.2, W2.2,
-> W6.1, S6.3, W5.2, W5.1, W4.1, W3.1, W2.1, W1.2, W1.1.
+> the real parity API in compose since W6.1. Cards (latest first): W6.3, W6.2,
+> W2.2, W6.1, S6.3, W5.2, W5.1, W4.1, W3.1, W2.1, W1.2, W1.1.
 
 ## How it works
 
@@ -16,8 +16,8 @@ landing/docs/legal are light-only by design.
 
 **Routes.** Public: `/`, `/pricing`, `/faq`, `/docs` + 15 doc pages, `/privacy`,
 `/terms`, `/security`. App group: `(flow)` = `/login`, `/connect`, `/onboarding`;
-`(dash)` = `/pipeline`, `/matches/[id]`, `/profile`, `/account/{billing,data,
-sessions}` — dashboard/flow routes are `force-dynamic` ((dash)/layout.tsx:9).
+`(dash)` = `/pipeline`, `/matches/[id]`, `/profile`, `/account/{autopilot,billing,
+data,sessions}` — dashboard/flow routes are `force-dynamic` ((dash)/layout.tsx:9).
 
 **The API seam (BFF).** `web/src/lib/api/types.ts:102` defines the `Api`
 interface, typed to the MCP tool shapes *before the parity API existed*.
@@ -66,6 +66,32 @@ it records the audit event but does NOT flip stage/consent — the agent's
 `stage === "awaiting_you" && applicationId`, with explicit copy of what approval
 authorizes (one submit, one application, recorded in the audit log); "Review in
 Claude" demotes to `btn--secondary` when the button shows.
+
+**L2 autopilot policy UI (W6.3).** Account → Autopilot
+(`account/autopilot/page.tsx`, nav entry in `AccountNav.tsx:8`) renders three
+cards: policy state (enabled chip, min score, daily cap, recorded-when, revoke
+button — or the honest off-state "Autopilot is off — every submit is yours"),
+the enable/update form (`AutopilotActions.tsx` `PolicyForm`, client component
+with `useTransition`) under an explicit consent statement (what L2 authorizes,
+that every auto-submit is audit-logged with its criteria, that revocation is
+immediate for new decisions), and the safe-boards list. Revoke copy is honest
+about in-flight authorizations: "already authorized … not recalled — your agent
+may still be mid-submit on one". Seam: `AutopilotPolicy`/`AutopilotBoard`
+(`types.ts:108-120`); `Api` gains `getAutopilotPolicy`/`getAutopilotBoards`
+(`types.ts:140-142`) and the writes `putAutopilotPolicy`/`revokeAutopilotPolicy`
+(`types.ts:159-160`). The HTTP adapter maps the camelCase seam to the API's
+wire shapes (`http.ts:58-69` — PUT sends snake_case `min_score`/`max_per_day`;
+GET returns camelCase via the API's `_policy_json`; see `api/autopilot.md`).
+Fixtures mirror real semantics (`fixtures.ts:274-285,322-339`): a revoked
+policy is history, not state (`getAutopilotPolicy` returns null); boards are
+honestly `[]` until S7.2c; put/revoke prepend audit entries. Server actions
+`saveAutopilotPolicy`/`revokeAutopilotPolicy` (`actions.ts:48-66`) re-validate
+ranges server-side (`isInt`; 0–100 / 1–50 mirroring the API — public POST
+endpoints never trust the client) and revalidate `/account/autopilot`. The
+sidebar autonomy card (`layout.tsx:12-36`) is live: it reads the policy and
+renders "Autopilot L2 · score ≥ X · ≤ Y/day" or "Supervised" (the W6.2-era
+"coming later" stub is gone). Boards come from the NEW read-only
+`GET /v1/autopilot/boards` (packs registry → API → UI), never hardcoded.
 
 **Docs (W2.1 + W2.2).** Route-per-page under a shared `DocsShell` + `_nav.ts`: the
 `DocSlug` literal union (`_nav.ts:11`) makes a slug typo a compile error; `DOCS_ORDER`
@@ -122,6 +148,17 @@ Fixtures remain the dev default and opt-in public-demo mode.
 - **One consent vocabulary (W6.2).** `CONSENT_LABELS` is keyed on
   `NonNullable<PipelineItem["consent"]>` — a new consent level without a label is
   a compile error, so chip and detail can never drift apart.
+- **camelCase at the seam boundary (W6.3).** The web seam is camelCase
+  end-to-end (PipelineItem precedent); the API maps at its boundary
+  (`_policy_json` on GET, snake_case accepted on PUT). A mutant dropping the
+  mapping fails the Python roundtrip test — the seam convention is pinned
+  server-side, not by web tests.
+- **Web tests stay pure-unit (W6.3 gate disposition).** node:test coverage for
+  the fixtures adapter / server actions was REJECTED: repo convention is web
+  pure-units only (`time`, `safeRedirect`); the API contract is pinned
+  Python-side (`tests/test_autopilot_l2.py` route tests) and browser-verified
+  against compose. Form errors surface via the error boundary — accepted, same
+  posture as `updateProfile` (MVP).
 - **Multi-select approve deliberately skipped (W6.2).** The card allowed it only
   as a thin loop over single-approve; rule of two — wait for the second concrete
   need.
@@ -158,6 +195,12 @@ Fixtures remain the dev default and opt-in public-demo mode.
   Python-side seam tests in `tests/test_pipeline_api.py` (see `api/pipeline.md`).
   Fused gate PASS; mutant probes killed: consent always-supervised,
   applicationId always-null.
+- W6.3: 10/10 node tests, tsc, 32/32 build, guard green; fused gate PASS (458
+  passed full suite). Mutant probes killed: camelCase mapping dropped → the
+  Python roundtrip test KeyErrors; boards auth dropped → the 401 test fails.
+  Browser-verified against compose: enable (70/2) → policy card + sidebar flip
+  to "Autopilot L2"; revoke → back to "Supervised"; curl cross-check PUT 204 →
+  GET `{minScore:70,maxPerDay:2}` → revoke 204 → GET `{policy:null}`.
 - Guard mutant probe (W1.1): crafted manifests killed — direct dep, transitive
   lock entry, `@google/genai`, npm-alias `npm:openai@4`; no false positives.
 - Python-side: `tests/test_compose_stack.py` asserts compose web points at the
@@ -182,10 +225,16 @@ Fixtures remain the dev default and opt-in public-demo mode.
   only (routed to S7.1); banner + trial nudge can coexist during webhook lag.
 - **Static-surface rules:** no `new Date()`/`Date.now()` in legal/sitemap ("Last updated" is
   passed in); robots.txt is advisory, not access control (W4.1 P3); `global-error.tsx` hardcodes light hex.
-- **Docs drift is real (W2.2):** the `_nav.ts` mcp-tools badge (38) duplicates
-  the server's `@mcp.tool()` count by hand — a drift-guard test is uncarded.
+- **Docs drift is real (W2.2):** the `_nav.ts` mcp-tools badge duplicates the
+  server's `@mcp.tool()` count by hand — and it HAS drifted: S7.2b added
+  `get_autopilot_policy`/`autopilot_queue` (40 tools) while the user-facing
+  badge still says 38. A drift-guard test remains uncarded; the next docs-page
+  touch should reconcile the badge and the tool grouping.
 - **Fixtures `approveSubmit` is a silent no-op in the wrong state** (W6.2 P3,
   accepted): the real API 400s, but the honest UI never offers the button outside
   `awaiting_you`, so the divergence is unreachable.
-- **The `autopilot_l2` copy branch in match detail is unreachable until S7.2b**
-  (W6.2 P3) — the L2 policy write path does not exist yet; revisit there.
+- **The `autopilot_l2` consent chip is reachable since S7.2b/W6.3** — an
+  L2-authorized application carries `consent_level` 2, which the seam maps to
+  `"autopilot_l2"` (pipeline `_CONSENT`, see `api/pipeline.md`). No shipped pack
+  is `auto_apply_safe` yet, so in practice the chip appears only once S7.2c
+  flags a board.

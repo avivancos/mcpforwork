@@ -51,7 +51,11 @@ mode, query-param style, browser-verified.
 **Consumers.** `services/hunt.py` (`hunt_plan`, `source_playbook`,
 `list_sources`) surfaces `mode` per source; the client-facing breadcrumbs and
 the `/hunt` prompt branch on it (see `docs/modules/hunt.md`,
-`docs/guidance.md`).
+`docs/guidance.md`). Since S7.2b, `services/autopilot.py` reads
+`apply_playbook.auto_apply_safe` via `safe_source_slugs()` — the flag now
+GATES the L2 autopilot (policy evaluation + queue + the API's boards list);
+no shipped pack is flagged yet (S7.2c curates which, after human browser
+verification).
 
 ## Design decisions
 
@@ -106,6 +110,11 @@ the `/hunt` prompt branch on it (see `docs/modules/hunt.md`,
   `test_hunt_guidance_tells_the_client_to_use_the_search_box_when_mode_says_so`.
 - **`load_sources` is `lru_cache`d** — tests that write pack files must not
   assume a re-read within one process.
+- **Flagging `auto_apply_safe: true` is a consent-relevant act** (S7.2b): the
+  moment a pack ships it, L2 policies can authorize submits on that board
+  without per-application approval. S7.2c sets it ONLY after human browser
+  verification of a native, login-free, non-hostile apply flow — expect few;
+  that conservatism is the product's risk posture.
 - **Open P3s (carded for the community-pack ingestion sprint):** `result_hint`
   is client-facing untrusted text (injection-shaped content is possible) and an
   unhashable `mode` value raises `TypeError` instead of a validation error.

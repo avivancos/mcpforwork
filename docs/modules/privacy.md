@@ -2,17 +2,17 @@
 
 > Data portability + erasure over the full per-user data model, plus the
 > carried S1-gate requirement that every read over the non-RLS'd `audit_log`
-> scopes by `user_id`. Cards (latest first): S6.6c (added `sessions` to the
-> inventory), S6.4.
+> scopes by `user_id`. Cards (latest first): S7.2b (added `autopilot_policy`),
+> S6.6c (added `sessions` to the inventory), S6.4.
 
 ## How it works
 
 `src/mcpforwork/services/privacy.py` — one ordered `_USER_TABLES` constant
-(`privacy.py:21-32`) drives BOTH export and delete so the two can never
+(`privacy.py:21-33`) drives BOTH export and delete so the two can never
 drift. Order is FK-safe child -> parent (findings are parents of
 applications/generated_assets/external_applications, so they come after those
-children; `sessions` and `audit_log` lead). `users` is the root: scoped by
-`id`, exported first, deleted last.
+children; `sessions`, `audit_log`, and `autopilot_policy` lead). `users` is
+the root: scoped by `id`, exported first, deleted last.
 
 - `export_user_data(uow, user_id)` (`privacy.py:41`): the `users` row plus
   `SELECT * … WHERE user_id ORDER BY id` per table. Read-only and
@@ -33,11 +33,11 @@ children; `sessions` and `audit_log` lead). `users` is the root: scoped by
   FK to a deleted user would fail — erasure leaves no trace, which is
   GDPR-correct for self-host.
 
-**Tools** (`src/mcpforwork/entrypoints/mcp/server.py:591-610`):
+**Tools** (`src/mcpforwork/entrypoints/mcp/server.py:617-636`):
 `export_my_data()` is read-only; `delete_my_data(confirm)` refuses unless
 `confirm=True` — an LLM client must never wipe the user's data by accident —
 and the refusal names the guard. `next_action` strings at
-`entrypoints/mcp/guidance.py:75-76`.
+`entrypoints/mcp/guidance.py:93-94`.
 
 **audit_log scoping.** `audit_log` is deliberately NOT FORCE-RLS'd
 (cross-cutting), so unlike the RLS-forced tables nothing automatic filters
@@ -74,11 +74,13 @@ Closing this read-scoping item marked ADR 0001 RESOLVED.
 
 ## Gotchas
 
-- `tests/test_privacy.py:16` `_PER_USER_TABLES` deliberately omits `sessions`
-  and `magic_link_tokens`: sessions rows exist only for API-authenticated
-  users, and the MCP self-host user has none, so `export["sessions"] == []`
-  would fail the non-empty completeness assertion. A table added to
-  `_USER_TABLES` only joins the test set if `_populate` can seed a real row.
+- `tests/test_privacy.py` `_PER_USER_TABLES` omits only `magic_link_tokens`
+  (auth-internal, never exported). `sessions` and `autopilot_policy` joined the
+  test set on S7.2b (the fused gate's P1: the new table needed export/delete
+  coverage, and the pre-existing `sessions` gap was fixed in the same pass) —
+  `_populate` seeds them via `autopilot.put_policy` and
+  `auth_session.issue_session`. A table added to `_USER_TABLES` only joins the
+  test set if `_populate` can seed a real row.
 - `_erase_asset_files` must run BEFORE deleting `generated_assets` rows — the
   on-disk filename is derived from the row's `id` + `asset_type`; after the
   DELETE the mapping is unrecoverable.

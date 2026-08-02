@@ -21,15 +21,33 @@ The MCP server never browses and never calls an LLM. The client agent reads
 3. `/review` — human decides `approve_match` / `discard_match`.
 4. `/apply` — `get_generation_brief` → draft → `submit_asset` →
    `ats_coverage_check` → `start_application` → `report_apply_progress` /
-   `resolve_field` → `request_submit` → **human clicks Submit at L0** →
-   `confirm_submitted`.
+   `resolve_field` → `request_submit` → its decision rules who clicks Submit
+   (L0: the human; L1/L2: the agent, once) → `confirm_submitted`.
 
-## Consent invariant (L0 today)
+## Consent invariant (L0/L1/L2 — S7.2)
 
 `request_submit` is the only place a submit authorization can be constructed.
-At L0 it always returns `await_human`. Autopilot L1/L2 (dashboard approval /
-recorded policy) lands in Sprint 7; guidance will gain those branches then.
+`SERVER_INSTRUCTIONS` (`guidance.py:26-34`) spells out the decision branches:
+`await_human` (L0, the default) means the HUMAN clicks Submit, never the
+agent; any other decision means the submit is authorized exactly once — level
+1 (the human approved THIS application in the dashboard) or level 2 (their
+recorded autopilot policy covers this board/score within the daily cap) — and
+the response's `instruction` field says which. The instructions state plainly
+that the agent can NEVER create or change a policy (dashboard-only, ADR 0005).
 `STEP_KINDS` never includes `"submit"`.
+
+The `request_submit` breadcrumb (`guidance.py:78-82`) mirrors the branches;
+`get_autopilot_policy` (:83-86) and `autopilot_queue` (:87-91) gained
+breadcrumbs when the read-only tools landed (S7.2b). The `/apply` PROMPT
+(`server.py:672-696`) deliberately keeps its L0 wording — "At L0 the decision
+is await_human" remains literally true; the server-level instructions carry
+the full L1/L2 contract.
+
+**Guidance never writes the literal decision verb** (S7.2b): the CI
+consent-verb grep fails the build on `submit_authorized` outside
+`services/`, so guidance prose says "the submit IS authorized" and leaves the
+per-decision directive to the response's `instruction` field — the grep keeps
+full strength.
 
 ## Tests
 
