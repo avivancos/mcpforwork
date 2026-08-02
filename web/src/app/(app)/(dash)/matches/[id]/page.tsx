@@ -49,11 +49,22 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
 
           <div className={styles.statusRow}>
             <StageChip stage={match.stage} size={10.5} />
-            {match.consent && <span>Supervised — every submit is yours</span>}
+            {match.consent === "supervised" && <span>Supervised — every submit is yours</span>}
+            {match.consent === "autopilot_l1" && (
+              <span>Autopilot L1 — you approved this submit in the dashboard</span>
+            )}
+            {match.consent === "autopilot_l2" && (
+              <span>Autopilot L2 — submitted under your recorded policy</span>
+            )}
             <span style={{ color: "var(--ink-4)" }}>Updated {timeAgo(match.updated)}</span>
           </div>
 
-          <MatchActions id={match.id} stage={match.stage} postingUrl={match.postingUrl} />
+          <MatchActions
+            id={match.id}
+            stage={match.stage}
+            postingUrl={match.postingUrl}
+            applicationId={match.applicationId}
+          />
 
           {match.assets.length > 0 && (
             <div className={styles.sectionCard}>

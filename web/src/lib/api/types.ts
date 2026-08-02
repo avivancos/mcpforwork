@@ -27,8 +27,14 @@ export interface PipelineItem {
   company: string;
   city: string;
   stage: Stage;
-  /** Non-null once an application exists. 1.0 is supervised-only. */
-  consent: "supervised" | null;
+  /**
+   * Non-null once an application exists. Mirrors the application's
+   * consent_level: 0 supervised · 1 autopilot_l1 (dashboard-approved submit,
+   * S7.2a) · 2 autopilot_l2 (policy-authorized submit, S7.2b).
+   */
+  consent: "supervised" | "autopilot_l1" | "autopilot_l2" | null;
+  /** The active application's id — the approve-submit action's target. */
+  applicationId: string | null;
   updated: string; // ISO-8601 across the seam; humanized at render (timeAgo)
   /** Set when stage === "awaiting_you" — why it's paused. */
   needsYou?: string;
@@ -98,6 +104,14 @@ export interface AuditEntry {
   event: string;
 }
 
+/** Display labels for the consent union — the single vocabulary both the
+ * pipeline table and the match detail render (W6.2). */
+export const CONSENT_LABELS: Record<NonNullable<PipelineItem["consent"]>, string> = {
+  supervised: "Supervised",
+  autopilot_l1: "Autopilot L1",
+  autopilot_l2: "Autopilot L2",
+};
+
 /** The single seam the UI calls — implemented by fixtures or HTTP (ADR 0002). */
 export interface Api {
   getProfile(): Promise<Profile>;
@@ -113,6 +127,13 @@ export interface Api {
   createBillingSession(kind: "checkout" | "portal"): Promise<{ url: string | null }>;
   approveMatch(id: string): Promise<void>;
   discardMatch(id: string): Promise<void>;
+  /**
+   * L1 consent write (ADR 0005): approve the submit of ONE application that
+   * is waiting on you. Takes the APPLICATION id (PipelineItem.applicationId).
+   * The only consent artifact the dashboard can mint — it never fills or
+   * submits.
+   */
+  approveSubmit(applicationId: string): Promise<void>;
   restoreMatch(id: string): Promise<void>;
   recordOutcome(id: string, outcome: Outcome): Promise<void>;
   updateProfile(patch: Partial<Profile>): Promise<void>;

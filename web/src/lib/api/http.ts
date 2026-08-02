@@ -57,6 +57,8 @@ export function httpApi(rawBase: string): Api {
     createBillingSession: (kind) => post("/v1/billing/session", { kind }),
     approveMatch: (id) => post(`/v1/matches/${encodeURIComponent(id)}/approve`),
     discardMatch: (id) => post(`/v1/matches/${encodeURIComponent(id)}/discard`),
+    approveSubmit: (applicationId) =>
+      post(`/v1/applications/${encodeURIComponent(applicationId)}/approve-submit`),
     restoreMatch: (id) => post(`/v1/matches/${encodeURIComponent(id)}/restore`),
     recordOutcome: (id, outcome) => post(`/v1/matches/${encodeURIComponent(id)}/outcome`, { outcome }),
     updateProfile: (patch) => post("/v1/profile", patch),

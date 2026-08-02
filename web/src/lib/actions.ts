@@ -22,6 +22,17 @@ export async function discardMatch(id: string): Promise<void> {
   revalidatePath(`/matches/${id}`);
 }
 
+/**
+ * L1 (ADR 0005): approve one application's submit. Takes the application id
+ * plus the finding id (for revalidation) — the consent write itself targets
+ * the application.
+ */
+export async function approveSubmit(applicationId: string, findingId: string): Promise<void> {
+  await api.approveSubmit(applicationId);
+  revalidatePath("/pipeline");
+  revalidatePath(`/matches/${findingId}`);
+}
+
 export async function restoreMatch(id: string): Promise<void> {
   await api.restoreMatch(id);
   revalidatePath("/pipeline");

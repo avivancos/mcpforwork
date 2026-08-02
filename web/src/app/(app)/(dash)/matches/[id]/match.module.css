@@ -96,6 +96,14 @@
   flex-wrap: wrap;
 }
 
+.approveNote {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-4);
+  max-width: 52ch;
+}
+
 .statusRow {
   display: flex;
   align-items: center;

@@ -77,6 +77,7 @@ const DAY = 24 * HOUR;
 const rowsSeed: Row[] = [
   {
     id: "m_8k3d",
+    applicationId: "app_8k3d",
     fit: 91,
     role: "ICU Staff Nurse",
     company: "Mater Private",
@@ -99,6 +100,7 @@ const rowsSeed: Row[] = [
   },
   {
     id: "m_7q2f",
+    applicationId: "app_7q2f",
     fit: 86,
     role: "Staff Nurse, Critical Care",
     company: "St Vincent's UH",
@@ -115,6 +117,7 @@ const rowsSeed: Row[] = [
   },
   {
     id: "m_5r9a",
+    applicationId: "app_5r9a",
     fit: 84,
     role: "ICU Nurse, Nights",
     company: "Beacon Hospital",
@@ -128,6 +131,7 @@ const rowsSeed: Row[] = [
   },
   {
     id: "m_3t7c",
+    applicationId: null,
     fit: 78,
     role: "Critical Care Nurse",
     company: "Tallaght University Hospital",
@@ -139,6 +143,7 @@ const rowsSeed: Row[] = [
   },
   {
     id: "m_2w4e",
+    applicationId: null,
     fit: 74,
     role: "Staff Nurse — ICU/HDU",
     company: "Blackrock Clinic",
@@ -150,6 +155,7 @@ const rowsSeed: Row[] = [
   },
   {
     id: "m_6y1b",
+    applicationId: "app_6y1b",
     fit: 76,
     role: "ICU Nurse",
     company: "Hermitage Clinic",
@@ -163,6 +169,7 @@ const rowsSeed: Row[] = [
   },
   {
     id: "m_1z8h",
+    applicationId: null,
     fit: 68,
     role: "Paediatric ICU Nurse",
     company: "Children's Health Ireland",
@@ -174,6 +181,7 @@ const rowsSeed: Row[] = [
   },
   {
     id: "m_9v5j",
+    applicationId: "app_9v5j",
     fit: 82,
     role: "Staff Nurse, Critical Care",
     company: "St James's Hospital",
@@ -278,6 +286,23 @@ export const fixturesApi: Api = {
     if (r && (r.stage === "new_match" || r.stage === "filling")) {
       r.stage = "discarded";
       r.updated = isoAgo(0);
+    }
+  },
+  async approveSubmit(applicationId) {
+    // Honest mirror of the real API (ADR 0005): the approval is RECORDED —
+    // the row stays awaiting_you until the agent's request_submit turns it
+    // into the one-time authorization (consent flips then, not here). What
+    // changes immediately is the audit trail.
+    const r = rows.find((x) => x.applicationId === applicationId);
+    if (r && r.stage === "awaiting_you") {
+      r.detail.audit.unshift({
+        at: isoAgo(0),
+        event: "approve_submit — you approved this submit in the dashboard",
+      });
+      accountAudit.unshift({
+        at: isoAgo(0),
+        event: `approve_submit — ${r.role}, ${r.company}`,
+      });
     }
   },
   async restoreMatch(id) {

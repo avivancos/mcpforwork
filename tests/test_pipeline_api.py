@@ -194,7 +194,43 @@ def test_a_match_without_an_application_has_no_consent_badge(api):
     (item,) = client.get("/v1/pipeline").json()
     assert item["stage"] == "new_match"
     assert item["consent"] is None
+    assert item["applicationId"] is None
     assert "needsYou" not in item or item["needsYou"] is None
+
+
+def test_an_awaiting_you_item_exposes_the_application_id(api):
+    """W6.2: the approve-submit action targets the application, so the seam
+    must carry its id while the application is active."""
+    client, env = api
+    uid = _uid(env)
+    fid = _seed_finding(env, uid, "https://example.com/jobs/l1", "Data Engineer")
+    app_id = _start_application(env, uid, fid)
+    _set_application_state(env, uid, fid, "awaiting_human")
+    (item,) = client.get("/v1/pipeline").json()
+    assert item["applicationId"] == str(app_id)
+    # …and the match detail carries it too.
+    detail = client.get(f"/v1/matches/{fid}").json()
+    assert detail["applicationId"] == str(app_id)
+
+
+def test_an_l1_approved_application_reads_autopilot_l1(api):
+    """consent_level 1 (S7.2a) surfaces as autopilot_l1 across the seam."""
+    client, env = api
+    uid = _uid(env)
+    fid = _seed_finding(env, uid, "https://example.com/jobs/l1c", "Data Engineer")
+    _start_application(env, uid, fid)
+    _set_application_state(env, uid, fid, "submit_requested")
+    uow = connect(f"sqlite:///{env / 'api.db'}")
+    try:
+        uow.execute(
+            "UPDATE applications SET consent_level = 1 WHERE user_id = ? AND finding_id = ?",
+            (uid, fid),
+        )
+        uow.commit()
+    finally:
+        uow.close()
+    (item,) = client.get("/v1/pipeline").json()
+    assert item["consent"] == "autopilot_l1"
 
 
 def test_pipeline_stats_count_the_derived_stages(api):

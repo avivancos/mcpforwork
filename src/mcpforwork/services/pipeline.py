@@ -36,6 +36,9 @@ _NEEDS_YOU = {
     "submit_requested": "Confirm the submission landed",
 }
 
+# consent_level (applications) → the dashboard's consent vocabulary (W6.2).
+_CONSENT = {0: "supervised", 1: "autopilot_l1", 2: "autopilot_l2"}
+
 # Stages counting as "reached the employer" / "got a response".
 _SUBMITTED_STAGES = frozenset(
     {"submitted", "verified", "interview", "offer", "rejected", "no_response"}
@@ -87,7 +90,9 @@ def _item(finding: Mapping[str, Any], app: Mapping[str, Any] | None) -> dict[str
         "company": finding.get("company_name") or "",
         "city": finding.get("location") or "",
         "stage": stage,
-        "consent": "supervised" if active else None,
+        "consent": _CONSENT.get(app["consent_level"], "supervised") if active else None,
+        # The approve-submit action targets the application, not the finding.
+        "applicationId": str(app["id"]) if active else None,
         "updated": app["updated_at"] if active else finding["last_seen"],
     }
     if stage == "awaiting_you":

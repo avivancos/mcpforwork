@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { StageChip } from "@/components/StageChip";
 import { approveMatch, discardMatch, recordOutcome, restoreMatch } from "@/lib/actions";
-import type { Outcome, PipelineItem } from "@/lib/api/types";
+import { CONSENT_LABELS, type Outcome, type PipelineItem } from "@/lib/api/types";
 import { timeAgo } from "@/lib/time";
 import styles from "./pipeline.module.css";
 
@@ -171,7 +171,7 @@ export function PipelineTable({ items }: { items: PipelineItem[] }) {
               <span className={styles.consent}>
                 {item.consent ? (
                   <>
-                    Supervised ·{" "}
+                    {CONSENT_LABELS[item.consent]} ·{" "}
                     <Link href={`/matches/${item.id}#audit`} className={styles.auditLink}>
                       audit
                     </Link>
