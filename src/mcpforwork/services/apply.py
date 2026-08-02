@@ -409,6 +409,15 @@ def request_submit(
     policy = autopilot.get_policy(uow, user_id)
     refusal = ""
     if policy is not None:
+        # Serialize L2 authorization per user (S7.2d): the cap count and the
+        # consent flip must be atomic ACROSS transactions — otherwise N
+        # parallel request_submit calls on distinct pre-staged applications
+        # each read authorized_today < cap and all flip (TOCTOU). This no-op
+        # self-update takes the user's row write lock: on SQLite it grabs the
+        # database-wide writer lock, on Postgres a row lock after which READ
+        # COMMITTED re-snapshots the count. Concurrent L2 calls for one user
+        # thus run one-at-a-time; different users never block each other.
+        uow.execute("UPDATE users SET id = id WHERE id = ?", (user_id,))
         match = hunt.get_match(uow, user_id, app["finding_id"])
         safe = safe_sources if safe_sources is not None else autopilot.safe_source_slugs()
         decision = autopilot.evaluate(

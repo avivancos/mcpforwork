@@ -74,7 +74,10 @@ const GROUPS: { area: string; id: string; tools: { name: string; what: string }[
     id: "privacy",
     tools: [
       { name: "export_my_data", what: "everything stored about you, as JSON (GDPR export)" },
-      { name: "delete_my_data", what: "erase your account and all personal data" },
+      {
+        name: "delete_my_data",
+        what: "two-step erasure: first a deletion summary + 5-min confirm token, then — only with that token — your account and all personal data are erased",
+      },
       { name: "server_info", what: "version, transport, and the active tenant" },
     ],
   },

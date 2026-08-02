@@ -91,7 +91,11 @@ _NEXT_ACTIONS: dict[str, str] = {
     ),
     "abandon_application": "Closed. start_application again to retry, or back to /review.",
     "export_my_data": "Your full data export. Save it somewhere safe.",
-    "delete_my_data": "All your data is erased. Nothing was kept.",
+    "delete_my_data": (
+        "Two-step: no token → show the human the summary and the confirm_token; "
+        "only call again with the token if THEY explicitly confirm. With a "
+        "token → everything is erased; nothing was kept."
+    ),
     "confirm_submitted": "Recorded. Optionally record_outcome later; back to /review.",
     "record_outcome": "Noted for calibration. Back to /review or /hunt.",
     "get_asset_file": "Upload this file where the form asks for it.",

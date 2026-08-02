@@ -623,14 +623,21 @@ def export_my_data() -> str:
 
 
 @mcp.tool()
-def delete_my_data(confirm: bool = False) -> str:
-    """GDPR erasure: permanently delete ALL your data (every table + the account
-    row). IRREVERSIBLE — refuses unless confirm=True. Consider export_my_data
-    first."""
-    if not confirm:
-        return _fail("destructive — call again with confirm=True to erase all your data")
+def delete_my_data(confirm_token: str = "") -> str:
+    """GDPR erasure, two-step (S7.2d): called WITHOUT a token, returns a
+    per-table summary of what would be deleted plus a single-use
+    confirm_token (valid 5 minutes) — show both to the human. Called WITH
+    that token, permanently deletes ALL their data (every table + the
+    account row). IRREVERSIBLE. The token is the consent artifact: never
+    invent one — only the human can read it back to you. Consider
+    export_my_data first."""
     with _tenant_uow() as (uow, user_id):
-        result = privacy.delete_user_data(uow, user_id)
+        if confirm_token:
+            result = privacy.execute_deletion(uow, user_id, confirm_token)
+        else:
+            result = privacy.request_deletion(uow, user_id)
+        if "error" in result:
+            return _fail(result["error"])
         uow.commit()
     return _ok("delete_my_data", result)
 

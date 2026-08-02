@@ -7,6 +7,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from mcpforwork.adapters.db import connect
 from mcpforwork.adapters.db.backend import SqlUnitOfWork
 from mcpforwork.entrypoints.mcp import server
@@ -179,19 +181,159 @@ def test_delete_is_idempotent(uow: SqlUnitOfWork) -> None:
     assert sum(again["deleted"].values()) == 0
 
 
-def test_delete_my_data_tool_refuses_without_confirm(mcp_env) -> None:
+def test_request_deletion_summarizes_and_mints_a_token_without_deleting(
+    uow: SqlUnitOfWork,
+) -> None:
+    uid, _ = _populate(uow, "a@example.com", "https://x.com/jobs/1")
+    result = privacy.request_deletion(uow, uid)
+    uow.commit()
+    # The summary tells the human exactly what erasure means, per table.
+    assert result["summary"]["profiles"] == 1
+    assert result["summary"]["applications"] == 1
+    assert result["summary"]["users"] == 1
+    assert result["expires_in_seconds"] == 300
+    assert len(result["confirm_token"]) >= 32
+    # Nothing deleted; the request itself is on the audit trail.
+    assert uow.fetchone("SELECT id FROM users WHERE id = ?", (uid,)) is not None
+    assert uow.fetchone(
+        "SELECT id FROM audit_log WHERE user_id = ? AND action = 'delete_my_data_requested'",
+        (uid,),
+    )
+    # Only the HASH is stored — the raw token is never persisted.
+    stored = uow.fetchone("SELECT token_hash FROM delete_confirm_tokens WHERE user_id = ?", (uid,))
+    assert stored and stored["token_hash"] != result["confirm_token"]
+
+
+def test_execute_deletion_with_a_valid_token_erases_everything(uow: SqlUnitOfWork) -> None:
+    uid, _ = _populate(uow, "a@example.com", "https://x.com/jobs/1")
+    token = privacy.request_deletion(uow, uid)["confirm_token"]
+    uow.commit()
+    result = privacy.execute_deletion(uow, uid, token)
+    uow.commit()
+    assert result["ok"] is True
+    for table in _PER_USER_TABLES:
+        assert (
+            uow.fetchone(f"SELECT COUNT(*) AS n FROM {table} WHERE user_id = ?", (uid,))["n"] == 0
+        )
+    assert uow.fetchone("SELECT id FROM users WHERE id = ?", (uid,)) is None
+
+
+def test_execute_deletion_rejects_an_unknown_token_and_deletes_nothing(
+    uow: SqlUnitOfWork,
+) -> None:
+    uid, _ = _populate(uow, "a@example.com", "https://x.com/jobs/1")
+    result = privacy.execute_deletion(uow, uid, "not-a-real-token")
+    uow.commit()
+    assert result["kind"] == "invalid_token"
+    assert uow.fetchone("SELECT id FROM users WHERE id = ?", (uid,)) is not None
+    assert uow.fetchone("SELECT COUNT(*) AS n FROM profiles WHERE user_id = ?", (uid,))["n"] == 1
+
+
+def test_execute_deletion_rejects_a_reused_token(uow: SqlUnitOfWork) -> None:
+    # Single-use: the second execution with the same token must fail even
+    # though the first already erased the user (the token row is gone too) —
+    # and a FRESH user's token from the same flow must not be replayable.
+    uid, _ = _populate(uow, "a@example.com", "https://x.com/jobs/1")
+    token = privacy.request_deletion(uow, uid)["confirm_token"]
+    uow.commit()
+    assert privacy.execute_deletion(uow, uid, token)["ok"] is True
+    uow.commit()
+    again = privacy.execute_deletion(uow, uid, token)
+    assert again["kind"] == "invalid_token"  # row erased with the account
+
+
+def test_execute_deletion_erases_its_own_token_rows(uow: SqlUnitOfWork) -> None:
+    # FK-safe erasure: the token rows vanish with the account, so the final
+    # DELETE FROM users cannot hit the delete_confirm_tokens constraint.
+    uid, _ = _populate(uow, "a@example.com", "https://x.com/jobs/1")
+    token = privacy.request_deletion(uow, uid)["confirm_token"]
+    uow.commit()
+    privacy.execute_deletion(uow, uid, token)
+    uow.commit()
+    assert (
+        uow.fetchone("SELECT COUNT(*) AS n FROM delete_confirm_tokens WHERE user_id = ?", (uid,))[
+            "n"
+        ]
+        == 0
+    )
+
+
+def test_execute_deletion_rejects_an_expired_token(uow: SqlUnitOfWork) -> None:
+    uid, _ = _populate(uow, "a@example.com", "https://x.com/jobs/1")
+    t0 = datetime(2026, 8, 2, 12, 0, 0, tzinfo=UTC)
+    token = privacy.request_deletion(uow, uid, now=t0)["confirm_token"]
+    uow.commit()
+    later = datetime(2026, 8, 2, 12, 6, 0, tzinfo=UTC)  # 6 min > 5 min TTL
+    result = privacy.execute_deletion(uow, uid, token, now=later)
+    uow.commit()
+    assert result["kind"] == "token_expired"
+    assert uow.fetchone("SELECT id FROM users WHERE id = ?", (uid,)) is not None
+
+
+def test_the_token_expires_at_exactly_its_ttl_boundary(uow: SqlUnitOfWork) -> None:
+    # Boundary pin: at exactly expires_at the token is already expired (>=),
+    # one second before it still redeems.
+    uid, _ = _populate(uow, "a@example.com", "https://x.com/jobs/1")
+    t0 = datetime(2026, 8, 2, 12, 0, 0, tzinfo=UTC)
+    boundary = datetime.fromtimestamp(
+        int(t0.timestamp()) + privacy.CONFIRM_TOKEN_TTL_SECONDS, tz=UTC
+    )
+    expired = privacy.request_deletion(uow, uid, now=t0)["confirm_token"]
+    assert privacy.execute_deletion(uow, uid, expired, now=boundary)["kind"] == "token_expired"
+    fresh = privacy.request_deletion(uow, uid, now=t0)["confirm_token"]
+    uow.commit()
+    just_before = datetime.fromtimestamp(boundary.timestamp() - 1, tz=UTC)
+    result = privacy.execute_deletion(uow, uid, fresh, now=just_before)
+    uow.commit()
+    assert result["ok"] is True
+    assert result["audited_as"] == "delete_my_data_confirmed"
+
+
+def test_execute_deletion_refuses_another_users_token(uow: SqlUnitOfWork) -> None:
+    # Cross-tenant: B's token presented as A must refuse WITHOUT revealing
+    # the token exists (same error as unknown) and delete nothing of anyone's.
+    a, _ = _populate(uow, "a@example.com", "https://a.com/jobs/1")
+    b, _ = _populate(uow, "b@example.com", "https://b.com/jobs/2")
+    b_token = privacy.request_deletion(uow, b)["confirm_token"]
+    uow.commit()
+    result = privacy.execute_deletion(uow, a, b_token)
+    uow.commit()
+    assert result["kind"] == "invalid_token"
+    for uid in (a, b):
+        assert uow.fetchone("SELECT id FROM users WHERE id = ?", (uid,)) is not None
+
+
+def test_delete_my_data_tool_is_two_step(mcp_env) -> None:
     server.update_profile(
         {"full_name": "Ada", "contact_email": "ada@x.com", "target_titles": ["Data Engineer"]}
     )
-    refusal = json.loads(server.delete_my_data(confirm=False))
-    assert "error" in refusal
-    assert "confirm" in refusal["error"].lower()  # names the guard, not a generic error
-    # Data still there on a fresh connection — the refusal did not delete.
+    step1 = json.loads(server.delete_my_data())
+    assert step1["summary"]["profiles"] == 1 and step1["confirm_token"]
+    # Nothing deleted by step 1.
     fresh = connect(mcp_env)
     try:
         assert fresh.fetchone("SELECT COUNT(*) AS n FROM profiles WHERE user_id = 1")["n"] == 1
     finally:
         fresh.close()
+    step2 = json.loads(server.delete_my_data(confirm_token=step1["confirm_token"]))
+    assert step2["ok"] is True
+    fresh = connect(mcp_env)
+    try:
+        assert fresh.fetchone("SELECT id FROM users WHERE id = 1") is None
+    finally:
+        fresh.close()
+
+
+def test_delete_my_data_tool_has_no_boolean_confirm_path(mcp_env) -> None:
+    # Structural: the pre-S7.2d boolean gate is gone — an agent cannot erase
+    # with `confirm=True` alone; the parameter no longer exists.
+    import inspect
+
+    params = inspect.signature(server.delete_my_data).parameters
+    assert "confirm" not in params
+    assert "confirm_token" in params
+    with pytest.raises(TypeError):
+        server.delete_my_data(confirm=True)
 
 
 def test_export_and_delete_tools_roundtrip_on_fresh_connection(mcp_env) -> None:
@@ -201,7 +343,8 @@ def test_export_and_delete_tools_roundtrip_on_fresh_connection(mcp_env) -> None:
     export = json.loads(server.export_my_data())
     assert export["user"]["email"] and export["profiles"]
 
-    confirmed = json.loads(server.delete_my_data(confirm=True))
+    token = json.loads(server.delete_my_data())["confirm_token"]
+    confirmed = json.loads(server.delete_my_data(confirm_token=token))
     assert confirmed["ok"] is True
     fresh = connect(mcp_env)
     try:

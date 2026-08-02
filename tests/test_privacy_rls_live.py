@@ -25,8 +25,8 @@ def two_users():
         pytest.skip("TEST_POSTGRES_URL not set")
     admin = pg_support.admin_connect()
     admin.execute(
-        "TRUNCATE autopilot_policy, sessions, playbook_reports, applications,"
-        " generated_assets, explore_findings,"
+        "TRUNCATE delete_confirm_tokens, autopilot_policy, sessions, playbook_reports,"
+        " applications, generated_assets, explore_findings,"
         " external_applications, style_profile, achievements, profiles, audit_log, users"
         " RESTART IDENTITY CASCADE"
     )
@@ -59,6 +59,34 @@ def test_export_does_not_leak_audit_log_across_tenants(two_users) -> None:
         # audit_log is not RLS-forced — only the explicit WHERE keeps bob out.
         assert export["audit_log"] and all(r["user_id"] == 1 for r in export["audit_log"])
         assert "bob-secret.com" not in blob
+    finally:
+        alice.close()
+        bob.close()
+
+
+def test_delete_confirm_tokens_are_rls_invisible_across_tenants(two_users) -> None:
+    """S7.2d two-step erasure on the backend where RLS is real: Alice's
+    confirm token is INVISIBLE in Bob's tenant context (FORCE RLS), so his
+    redeem attempt is an invalid_token refusal that deletes nothing; Alice's
+    own redeem erases her — and only her."""
+    admin = two_users
+    alice = pg_support.app_connect()
+    bob = pg_support.app_connect()
+    try:
+        alice.set_user_context(1)
+        bob.set_user_context(2)
+        token = privacy.request_deletion(alice, 1)["confirm_token"]
+        alice.commit()
+
+        refusal = privacy.execute_deletion(bob, 2, token)
+        assert refusal["kind"] == "invalid_token"
+        bob.rollback()  # nothing was written; end the transaction cleanly
+
+        result = privacy.execute_deletion(alice, 1, token)
+        alice.commit()
+        assert result["ok"] is True
+        assert admin.fetchone("SELECT id FROM users WHERE id = 1") is None
+        assert admin.fetchone("SELECT id FROM users WHERE id = 2") is not None
     finally:
         alice.close()
         bob.close()

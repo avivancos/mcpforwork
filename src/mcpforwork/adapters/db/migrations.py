@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -271,6 +271,22 @@ CREATE TABLE autopilot_policy (
 );
 CREATE INDEX idx_autopilot_policy_user ON autopilot_policy(user_id);
 """,
+    # delete_my_data two-step (S7.2d): single-use confirm tokens for GDPR
+    # erasure. A DEDICATED table, not magic_link_tokens — mixing token kinds
+    # would let a login token replay as a delete confirmation (and vice
+    # versa). Only the sha256 hash is stored; expires_at/used_at are Unix
+    # epoch seconds (dialect-uniform), same as magic_link_tokens.
+    12: """
+CREATE TABLE delete_confirm_tokens (
+  id         INTEGER PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX idx_delete_confirm_tokens_user ON delete_confirm_tokens(user_id);
+""",
 }
 
 # Migrations whose script recreates a table that FK children reference; these
@@ -291,6 +307,7 @@ _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "009_sessions.sql": 9,
     "010_applications_submit_approval.sql": 10,
     "011_autopilot_policy.sql": 11,
+    "012_delete_confirm_tokens.sql": 12,
 }
 
 
