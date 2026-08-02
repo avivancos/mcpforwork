@@ -61,18 +61,18 @@ export const DOCS_NAV: DocGroup[] = [
   {
     label: "Reference",
     items: [
-      { name: "MCP tools", slug: "/docs/mcp-tools", count: 14, available: false },
-      { name: "Slash commands", slug: "/docs/slash-commands", available: false },
-      { name: "Configuration", slug: "/docs/configuration", available: false },
-      { name: "Digest email", slug: "/docs/digest-email", available: false },
+      { name: "MCP tools", slug: "/docs/mcp-tools", count: 38 },
+      { name: "Slash commands", slug: "/docs/slash-commands" },
+      { name: "Configuration", slug: "/docs/configuration" },
+      { name: "Digest email", slug: "/docs/digest-email" },
     ],
   },
   {
     label: "Self-hosting",
     items: [
-      { name: "Install & run", slug: "/docs/install", available: false },
-      { name: "Data & backups", slug: "/docs/data-backups", available: false },
-      { name: "Contribute a pack", slug: "/docs/contribute-a-pack", available: false },
+      { name: "Install & run", slug: "/docs/install" },
+      { name: "Data & backups", slug: "/docs/data-backups" },
+      { name: "Contribute a pack", slug: "/docs/contribute-a-pack" },
     ],
   },
 ];
