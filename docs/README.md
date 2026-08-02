@@ -21,14 +21,14 @@ User-facing docs live in the repo README and the web docs pages
 - [modules/packs.md](modules/packs.md) — packs-as-data: schema, geo packs, `search_box`, `apply_playbook` contract (https-only `form_url_pattern`, quirks → fill plan), honest-empty `auto_apply_safe` after S7.2c browser pass (S2.3–S2.6, S7.2c)
 - [modules/hunt.md](modules/hunt.md) — hunt pipeline; `apply_hint` / `apply_playbook` from packs (S2.4, S2.6, S7.2c)
 - [modules/generation.md](modules/generation.md) — briefs, assets, ATS coverage, review tools (S3.x)
-- [guidance.md](guidance.md) — client behavioral contract: instructions, prompts, breadcrumbs; CV-first `/setup`; `/apply` honors fill-plan quirks (S5.3, S6.5, S7.2, S7.2c, S7.2d)
+- [guidance.md](guidance.md) — client behavioral contract: instructions, prompts, breadcrumbs; CV-first `/setup` + URL preview (`preview_url_import`); `/apply` honors fill-plan quirks (S5.3–S5.4, S6.5, S7.2, S7.2c, S7.2d)
 
 ### Apply loop
 - [modules/apply.md](modules/apply.md) — state machine, progress loop, consent gate, L1 approval loop, L2 policy branch + cap TOCTOU serialization, fill-plan quirks from `apply_playbook`, obstacles, abandon (S4.x, S6.0, S7.2a–S7.2d)
 - [modules/autopilot.md](modules/autopilot.md) — consent artifacts write side (ADR 0005): L1 approval, L2 policy CRUD + evaluate + queue, `safe_source_slugs` from packs (empty post-S7.2c), CI consent-write gate (S7.2a–S7.2c; TOCTOU closed S7.2d)
 
 ### CV + CLI
-- [modules/cv-parsing.md](modules/cv-parsing.md) — CV parser, evidence-only `setup_hints`, progressive Tier 2 (S5.3, S5.1–S5.2)
+- [modules/cv-parsing.md](modules/cv-parsing.md) — CV parser, evidence-only `setup_hints`, `preview_url_import` (https-only, never fetches), progressive Tier 2 (S5.4, S5.3, S5.1–S5.2)
 - [modules/cli.md](modules/cli.md) — CLI packaging (`S5.3_cli_packaging`, S6.7)
 
 ### API (Starlette parity API)

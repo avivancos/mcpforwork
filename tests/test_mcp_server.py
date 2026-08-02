@@ -46,6 +46,7 @@ def test_server_instructions_describe_the_shipped_apply_loop() -> None:
 
 def test_setup_prompt_is_cv_first_and_uses_setup_hints() -> None:
     # S5.3: paste CV → parse_cv → confirm contact + hints → propose focus → persist.
+    # S5.4: LinkedIn/URL → preview_url_import → CONFIRM → import_from_url_findings.
     prompt = server.setup_session()
     lowered = prompt.lower()
     assert "parse_cv" in lowered
@@ -53,6 +54,8 @@ def test_setup_prompt_is_cv_first_and_uses_setup_hints() -> None:
     assert "confirm" in lowered
     assert "update_profile" in lowered
     assert "profile_gaps" in lowered
+    assert "preview_url_import" in lowered
+    assert "import_from_url_findings" in lowered
     # CV-first: parse_cv appears before profile_gaps in the orchestration.
     assert lowered.index("parse_cv") < lowered.index("profile_gaps")
     assert "never invent" in lowered
@@ -60,6 +63,8 @@ def test_setup_prompt_is_cv_first_and_uses_setup_hints() -> None:
     instr = guidance.SERVER_INSTRUCTIONS.lower()
     assert "cv-first" in instr or "parse_cv" in instr
     assert "setup_hints" in instr or "setup_hints" in guidance.next_action("parse_cv").lower()
+    assert "preview_url_import" in instr
+    assert "confirm" in guidance.next_action("preview_url_import").lower()
 
 
 def test_apply_prompt_covers_the_full_orchestration_loop() -> None:

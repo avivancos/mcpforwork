@@ -12,13 +12,19 @@ The MCP server never browses and never calls an LLM. The client agent reads
 - [`src/mcpforwork/entrypoints/mcp/server.py`](../src/mcpforwork/entrypoints/mcp/server.py)
   — `@mcp.prompt` definitions.
 
-## Shipped default flow (S6.5; `/setup` CV-first since S5.3)
+## Shipped default flow (S6.5; `/setup` CV-first since S5.3; URL preview S5.4)
 
-1. `/setup` — CV-first: paste CV → `parse_cv` (contact + `setup_hints`) →
-   CONFIRM contact and proposed focus (titles/seniority/sectors from
-   `cv_text` + hints; client LLM proposes, human confirms) →
-   `update_profile` → progressive Tier 2 via `profile_gaps` /
-   `add_achievements` / `set_style_profile`. Server never invents.
+1. `/setup` — CV-first, two intake arms:
+   - Pasted CV → `parse_cv` (contact + `setup_hints`) → CONFIRM contact and
+     proposed focus (titles/seniority/sectors from `cv_text` + hints; client
+     LLM proposes, human confirms) → `update_profile`.
+   - LinkedIn/GitHub/portfolio → client opens URL in the user's browser →
+     paste visible text → `preview_url_import(url, page_text)` (read-only;
+     server never fetches; https-only) → CONFIRM →
+     `import_from_url_findings(url, confirmed_fields)` (include `links` /
+     `cv_text`).
+   Then progressive Tier 2 via `profile_gaps` / `add_achievements` /
+   `set_style_profile`. Server never invents.
 2. `/hunt` — `hunt_plan` → browser extract (honor `mode: search_box`) →
    `submit_findings` → `list_matches`.
 3. `/review` — human decides `approve_match` / `discard_match`.
@@ -29,15 +35,19 @@ The MCP server never browses and never calls an LLM. The client agent reads
    portal quirks listed in the fill plan (from the source `apply_playbook`,
    S7.2c).
 
-### `/setup` + `parse_cv` breadcrumbs (S5.3)
+### `/setup` + `parse_cv` / `preview_url_import` breadcrumbs (S5.3–S5.4)
 
-`SERVER_INSTRUCTIONS` step 1 (`guidance.py:17-18`) names the CV-first chain
-explicitly. The `parse_cv` breadcrumb (`guidance.py:52-58`) tells the client:
-None = ask; review `setup_hints` (empty = unknown); propose focus from
-`cv_text` + hints; CONFIRM; then `update_profile` with confirmed values +
-`cv_text`. The `/setup` prompt (`server.py:645-668`) mirrors that order —
-`parse_cv` before gap-filling; Tier 2 is one gap at a time, never a form-wall.
-`parse_cv` remains read-only (details: `modules/cv-parsing.md`).
+`SERVER_INSTRUCTIONS` step 1 (`guidance.py:17-19`) names both intake tools:
+`parse_cv` or `preview_url_import` → CONFIRM focus →
+`update_profile` / `import_from_url_findings`. The `parse_cv` breadcrumb
+(`guidance.py:61-68`) tells the client: None = ask; review `setup_hints`
+(empty = unknown); propose focus from `cv_text` + hints; CONFIRM; then
+`update_profile` with confirmed values + `cv_text`; for a LinkedIn/GitHub URL
+use `preview_url_import` instead. The `preview_url_import` breadcrumb
+(`guidance.py:54-58`) mirrors CONFIRM-then-`import_from_url_findings`
+(including `links` and `cv_text`). The `/setup` prompt (`server.py:673-698`)
+has arms 2a (CV) and 2b (URL paste); Tier 2 is one gap at a time, never a
+form-wall. Both preview tools are read-only (details: `modules/cv-parsing.md`).
 
 ## Consent invariant (L0/L1/L2 — S7.2)
 
@@ -51,10 +61,10 @@ the response's `instruction` field says which. The instructions state plainly
 that the agent can NEVER create or change a policy (dashboard-only, ADR 0005).
 `STEP_KINDS` never includes `"submit"`.
 
-The `request_submit` breadcrumb (`guidance.py:78-82`) mirrors the branches;
-`get_autopilot_policy` (:83-86) and `autopilot_queue` (:87-91) gained
+The `request_submit` breadcrumb (`guidance.py:92-96`) mirrors the branches;
+`get_autopilot_policy` (:97-100) and `autopilot_queue` (:101-105) gained
 breadcrumbs when the read-only tools landed (S7.2b). The `/apply` PROMPT
-(`server.py:672-696`) deliberately keeps its L0 wording — "At L0 the decision
+(`server.py:715-740`) deliberately keeps its L0 wording — "At L0 the decision
 is await_human" remains literally true; the server-level instructions carry
 the full L1/L2 contract.
 
@@ -66,10 +76,10 @@ full strength.
 
 ## Destructive erasure (S7.2d)
 
-`delete_my_data` is two-step. The breadcrumb (`guidance.py:94-98`) tells the
+`delete_my_data` is two-step. The breadcrumb (`guidance.py:108-112`) tells the
 client: no token → show the human the summary and `confirm_token`; only call
 again with that token if THEY explicitly confirm. The tool docstring
-(`server.py:627-633`) forbids inventing a token. This is friction, not
+(`server.py:653-660`) forbids inventing a token. This is friction, not
 ADR-0005 provenance — see `modules/privacy.md`.
 
 ## Tests
@@ -77,7 +87,8 @@ ADR-0005 provenance — see `modules/privacy.md`.
 `tests/test_mcp_server.py` asserts: every registered tool has a breadcrumb;
 instructions state zero-LLM + never-auto-submit; no stale "later sprint"
 claims; `/apply` prompt names the full orchestration verbs and mentions
-apply_playbook / fill-plan quirks (S7.2c); `/setup` is CV-first and names
-`setup_hints` (S5.3).
+apply_playbook / fill-plan quirks (S7.2c); `/setup` is CV-first, names
+`setup_hints` (S5.3), and pins `preview_url_import` → CONFIRM →
+`import_from_url_findings` (S5.4).
 `tests/test_privacy.py` pins the two-step tool signature (no boolean
 `confirm` path).

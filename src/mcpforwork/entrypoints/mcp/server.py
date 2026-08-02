@@ -272,7 +272,8 @@ def set_style_profile(
 @mcp.tool()
 def import_from_url_findings(url: str, fields: dict) -> str:
     """Apply client-LLM-extracted structured fields (LinkedIn/GitHub/portfolio)
-    to the active profile, recording the source url for provenance."""
+    to the active profile, recording the source url for provenance. Call ONLY
+    after preview_url_import + human CONFIRM — this tool writes."""
     uow, user_id = _uow()
     try:
         active = profiles.get_profile(uow, user_id)
@@ -291,6 +292,32 @@ def import_from_url_findings(url: str, fields: dict) -> str:
     return _ok(
         "import_from_url_findings",
         {"ok": True, "profile_id": pid, "profile": prof, "source": url},
+    )
+
+
+@mcp.tool()
+def preview_url_import(url: str, page_text: str) -> str:
+    """Read-only LinkedIn/GitHub/portfolio import preview (S5.4).
+
+    YOU open the URL in the user's browser and paste the visible page text.
+    The server never fetches. Returns the same contact + setup_hints shape as
+    parse_cv plus source_url. Does NOT write — CONFIRM with the human, then
+    import_from_url_findings(url, confirmed_fields)."""
+    if not isinstance(url, str) or not url.strip().lower().startswith("https://"):
+        return _fail("url must be an https URL")
+    if not isinstance(page_text, str):
+        return _fail("page_text must be a string")
+    if len(page_text) > MAX_CV_CHARS:
+        return _fail(f"page_text too large (max {MAX_CV_CHARS} chars)")
+    extracted = extract_profile_from_cv(page_text)
+    return _ok(
+        "preview_url_import",
+        {
+            "source_url": url.strip(),
+            "candidate": extracted["candidate"],
+            "setup_hints": extracted["setup_hints"],
+            "cv_text": extracted["cv_text"],
+        },
     )
 
 
@@ -647,20 +674,23 @@ def setup_session() -> str:
     """The /setup interview: CV-first focus, then fill remaining Tier-1 gaps."""
     return (
         "Build the profile CV-first (target < 3 minutes):\n"
-        "1. Ask the human to PASTE their CV text (or share a LinkedIn/GitHub/"
-        "portfolio URL). For a URL: open it in the user's browser, extract "
-        "structured fields, and call import_from_url_findings(url, fields).\n"
-        "2. For pasted CV text call parse_cv first (zero-LLM extraction). It "
-        "returns candidate contact fields + setup_hints (work_modes, "
-        "employment_types, skills_top, signals) + cv_text. Empty hints = "
-        "unknown — never invent on the server.\n"
-        "3. CONFIRM contact fields with the human. Using cv_text + setup_hints, "
-        "propose 1-5 target_titles, sector(s), seniority, and any B2B/invoice "
-        "narrative from signals — CONFIRM the focus before persisting.\n"
-        "4. Persist with update_profile (one call): confirmed contact + focus + "
-        "cv_text + employment_types/work_modes from confirmed hints. Ask only "
-        "for gaps still missing (country/city, work-authorization + sponsorship "
-        "y/n, relocation, PRIVATE min salary, languages).\n"
+        "1. Ask the human to PASTE their CV text AND/OR share a LinkedIn/GitHub/"
+        "portfolio URL.\n"
+        "2a. Pasted CV → call parse_cv (zero-LLM). Returns candidate contact + "
+        "setup_hints (work_modes, employment_types, skills_top, signals) + "
+        "cv_text. Empty hints = unknown — never invent on the server.\n"
+        "2b. LinkedIn/GitHub/portfolio URL → YOU open it in the user's browser, "
+        "copy the visible profile text, call preview_url_import(url, page_text). "
+        "Same contact + setup_hints shape; the server NEVER fetches. Then after "
+        "CONFIRM call import_from_url_findings(url, confirmed_fields).\n"
+        "3. CONFIRM contact fields with the human. Using cv_text/page text + "
+        "setup_hints, propose 1-5 target_titles, sector(s), seniority, and any "
+        "B2B/invoice narrative from signals — CONFIRM the focus before "
+        "persisting.\n"
+        "4. Persist: update_profile and/or import_from_url_findings with "
+        "confirmed contact + focus + cv_text + employment_types/work_modes + "
+        "links. Ask only for gaps still missing (country/city, work-authorization "
+        "+ sponsorship y/n, relocation, PRIVATE min salary, languages).\n"
         "5. Offer Tier 2 progressively: call profile_gaps and raise ONE gap at a "
         "time when contextually useful (add_achievements is the highest-leverage "
         "input; set_style_profile captures the voice). Never a form-wall.\n"

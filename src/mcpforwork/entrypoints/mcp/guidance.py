@@ -14,8 +14,9 @@ SERVER_INSTRUCTIONS = (
     "never browses, fetches, scrapes, or calls an LLM. Never auto-submit: you "
     "draft and fill, the human reviews and submits at L0 (the consent invariant).\n\n"
     "Default flow:\n"
-    "1. /setup — CV-first: parse_cv (contact + setup_hints) → CONFIRM focus → "
-    "update_profile / add_achievements / set_style_profile / profile_gaps.\n"
+    "1. /setup — CV-first: parse_cv or preview_url_import (contact + "
+    "setup_hints) → CONFIRM focus → update_profile / import_from_url_findings / "
+    "add_achievements / set_style_profile / profile_gaps.\n"
     "2. /hunt — hunt_plan returns per-source search playbooks (each with a "
     "`mode`); open each in your browser — for `search_box` sources type the query "
     "into the on-page box — extract postings, submit_findings (deduped + scored), "
@@ -47,7 +48,15 @@ _NEXT_ACTIONS: dict[str, str] = {
     "set_active_profile": "get_profile to confirm the switch, then hunt_plan.",
     "add_achievements": "set_style_profile to capture the writing voice, or run hunt_plan.",
     "set_style_profile": "Run hunt_plan to start searching.",
-    "import_from_url_findings": "get_profile to review the merged fields.",
+    "import_from_url_findings": (
+        "get_profile to review the merged fields, then profile_gaps for leftovers."
+    ),
+    "preview_url_import": (
+        "CONFIRM contact + setup_hints with the human (None/empty = ask, never "
+        "invent). Propose titles/seniority/sectors from page text + hints, then "
+        "import_from_url_findings(url, confirmed_fields) including links and "
+        "cv_text. Never write before CONFIRM."
+    ),
     "profile_gaps": "Offer the FIRST gap conversationally; persist via update_profile.",
     "parse_cv": (
         "CONFIRM contact fields with the human (None = ask, never invent). "
@@ -55,7 +64,8 @@ _NEXT_ACTIONS: dict[str, str] = {
         "empty means unknown. Propose target_titles / seniority / sectors from "
         "cv_text + hints (you are the client LLM), CONFIRM the focus, then "
         "update_profile with the confirmed values + cv_text. Never invent "
-        "values the human rejected."
+        "values the human rejected. For a LinkedIn/GitHub URL use "
+        "preview_url_import instead."
     ),
     "hunt_plan": (
         "For each source open its search_url in YOUR browser. If mode is "

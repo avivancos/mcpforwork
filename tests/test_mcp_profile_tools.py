@@ -83,3 +83,48 @@ def test_import_from_url_findings_applies_fields_and_audits_source(mcp_env) -> N
         assert "linkedin.com/in/ada" in audit["detail"]
     finally:
         uow.close()
+
+
+_LINKEDIN_PAGE = """Ada Lovelace
+ada@example.com
+https://www.linkedin.com/in/ada
+
+About
+Remote freelance Python / LLM engineer. Open to B2B invoice work.
+
+Experience
+Built agentic MCP tools with FastAPI and Docker.
+"""
+
+
+def test_preview_url_import_returns_hints_and_never_writes(mcp_env) -> None:
+    # S5.4: LinkedIn path is preview (read-only) → CONFIRM → import_from_url_findings.
+    result = json.loads(
+        server.preview_url_import("https://www.linkedin.com/in/ada", _LINKEDIN_PAGE)
+    )
+    assert result["source_url"] == "https://www.linkedin.com/in/ada"
+    assert result["candidate"]["full_name"] == "Ada Lovelace"
+    assert result["candidate"]["contact_email"] == "ada@example.com"
+    hints = result["setup_hints"]
+    assert "remote" in hints["work_modes"]
+    assert "freelance" in hints["employment_types"]
+    assert "python" in hints["skills_top"]
+    assert any("b2b" in s.lower() or "invoice" in s.lower() for s in hints["signals"])
+    assert result["cv_text"] == _LINKEDIN_PAGE
+    assert "confirm" in result["next_action"].lower()
+    # Must not have created/updated a profile.
+    assert "error" in json.loads(server.get_profile())
+
+
+def test_preview_url_import_rejects_non_https(mcp_env) -> None:
+    assert "error" in json.loads(
+        server.preview_url_import("http://linkedin.com/in/ada", _LINKEDIN_PAGE)
+    )
+    assert "error" in json.loads(server.preview_url_import("javascript:alert(1)", _LINKEDIN_PAGE))
+    assert "error" in json.loads(server.preview_url_import("data:text/html,hi", _LINKEDIN_PAGE))
+
+
+def test_preview_url_import_rejects_oversized_page_text(mcp_env) -> None:
+    assert "error" in json.loads(
+        server.preview_url_import("https://www.linkedin.com/in/ada", "x" * 300_000)
+    )
