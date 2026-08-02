@@ -17,7 +17,7 @@ from mcpforwork.domain.dedup import dedup_hash
 from mcpforwork.packs import registry
 from mcpforwork.ports.db import UnitOfWork
 from mcpforwork.services import assets as assets_service
-from mcpforwork.services import audit, hunt, profiles
+from mcpforwork.services import audit, autopilot, hunt, profiles
 from mcpforwork.services import dedup as dedup_service
 from mcpforwork.services.briefs import ASSET_TYPES
 from mcpforwork.services.clock import utcnow_iso
@@ -322,8 +322,61 @@ def _authorize_l1(uow: UnitOfWork, user_id: int, app: dict[str, Any]) -> dict[st
     }
 
 
+def _l2_authorized_today(uow: UnitOfWork, user_id: int, now: datetime) -> int:
+    """L2 authorizations minted in the current UTC calendar day — the cap
+    window (ADR 0001 follow-up: the day boundary is UTC, load-bearing here).
+    Counted from the audit log's immutable created_at; the level-2 marker in
+    the JSON detail is a pre-filter both dialects evaluate as text."""
+    day = now.strftime("%Y-%m-%d")
+    row = uow.fetchone(
+        "SELECT COUNT(*) AS n FROM audit_log WHERE user_id = ?"
+        " AND action = 'submit_authorized' AND created_at >= ? AND detail LIKE ?",
+        (user_id, day, '%"level": 2%'),
+    )
+    return row["n"]
+
+
+def _authorize_l2(
+    uow: UnitOfWork, user_id: int, app: dict[str, Any], snapshot: dict[str, Any]
+) -> dict[str, Any]:
+    """Turn an active L2 policy into a one-time authorization (S7.2b).
+
+    Same exactly-once pattern as L1: the consent_level 0 → 2 flip is atomic,
+    and only the transaction that wins the flip writes the criteria-snapshot
+    audit row. Re-entry (consent_level already 2) re-returns the directive."""
+    instruction = (
+        "Your recorded autopilot policy authorizes THIS application's submit "
+        "(the criteria snapshot is in the audit log). Click Submit once, in the "
+        "already-open form, then call confirm_submitted(application_id, evidence)."
+    )
+    if app["consent_level"] == 0:
+        cur = uow.execute(
+            "UPDATE applications SET consent_level = 2, updated_at = ?"
+            " WHERE id = ? AND user_id = ? AND consent_level = 0",
+            (utcnow_iso(), app["id"], user_id),
+        )
+        if cur.rowcount == 1:
+            audit.record(
+                uow,
+                user_id,
+                "submit_authorized",
+                {"application_id": app["id"], "level": 2, "snapshot": snapshot},
+            )
+    return {
+        "decision": "submit_authorized",
+        "instruction": instruction,
+        "application_id": app["id"],
+    }
+
+
 def request_submit(
-    uow: UnitOfWork, user_id: int, application_id: int, summary: str = ""
+    uow: UnitOfWork,
+    user_id: int,
+    application_id: int,
+    summary: str = "",
+    *,
+    now: datetime | None = None,
+    safe_sources: frozenset[str] | set[str] | None = None,
 ) -> dict[str, Any]:
     """THE consent gate — the only path toward submission.
 
@@ -331,7 +384,9 @@ def request_submit(
     the client shows the filled form; the human clicks Submit themselves, then
     the client calls confirm_submitted. L1 (S7.2a, ADR 0005): an approval
     recorded through the human-session API turns a re-entry into a one-time
-    `submit_authorized`. The MCP entrypoint can never write that approval."""
+    `submit_authorized`. L2 (S7.2b): an active policy authorizes submits on
+    auto_apply_safe sources at/above its min score, up to its UTC daily cap.
+    The MCP entrypoint can never write either artifact."""
     app = _load_application(uow, user_id, application_id)
     if app is None:
         return {"error": f"application {application_id} not found"}
@@ -346,6 +401,27 @@ def request_submit(
         )
     if app["submit_approved_at"] is not None:
         return _authorize_l1(uow, user_id, app)
+    if app["consent_level"] == 2:
+        # Already L2-authorized: re-entry re-returns the directive without a
+        # cap re-check — a minted authorization is never stranded mid-submit.
+        return _authorize_l2(uow, user_id, app, snapshot={})
+
+    policy = autopilot.get_policy(uow, user_id)
+    refusal = ""
+    if policy is not None:
+        match = hunt.get_match(uow, user_id, app["finding_id"])
+        safe = safe_sources if safe_sources is not None else autopilot.safe_source_slugs()
+        decision = autopilot.evaluate(
+            policy=policy,
+            score=(match["score"] or 0) if match else 0,
+            source_slug=match["source_slug"] if match else "",
+            safe_sources=safe,
+            authorized_today=_l2_authorized_today(uow, user_id, now or datetime.now(UTC)),
+        )
+        if decision["authorize"]:
+            return _authorize_l2(uow, user_id, app, decision["snapshot"])
+        refusal = f" Autopilot policy did not authorize it ({decision['reason']})."
+
     audit.record(
         uow,
         user_id,
@@ -363,6 +439,7 @@ def request_submit(
             "browser. After they confirm it went through, call "
             "confirm_submitted(application_id, evidence)."
         ),
+        "reason": refusal.strip(),
         "application_id": application_id,
     }
 
@@ -387,8 +464,10 @@ def confirm_submitted(
         uow,
         user_id,
         url=match["url"],
-        # L1-authorized submits are distinguished in the record (S7.2a).
-        channel="browser_autopilot_l1" if app["consent_level"] == 1 else "browser_supervised",
+        # Autopilot-authorized submits are distinguished in the record (S7.2).
+        channel={0: "browser_supervised", 1: "browser_autopilot_l1", 2: "browser_autopilot_l2"}[
+            app["consent_level"]
+        ],
         title=match.get("title") or "",
         company_name=match.get("company_name") or "",
         finding_id=app["finding_id"],

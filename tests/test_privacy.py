@@ -4,13 +4,23 @@ not FORCE-RLS'd, so its per-tenant rows (applied URLs) must never leak across
 users on any read path."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from mcpforwork.adapters.db import connect
 from mcpforwork.adapters.db.backend import SqlUnitOfWork
 from mcpforwork.entrypoints.mcp import server
 from mcpforwork.services import apply as apply_service
-from mcpforwork.services import assets, hunt, playbooks, privacy, profiles, review
+from mcpforwork.services import (
+    assets,
+    auth_session,
+    autopilot,
+    hunt,
+    playbooks,
+    privacy,
+    profiles,
+    review,
+)
 
 # Every per-user table must be represented, so export/delete completeness is real.
 _PER_USER_TABLES = {
@@ -23,6 +33,8 @@ _PER_USER_TABLES = {
     "applications",
     "playbook_reports",
     "audit_log",
+    "autopilot_policy",
+    "sessions",
 }
 
 
@@ -47,6 +59,10 @@ def _populate(uow: SqlUnitOfWork, email: str, url: str) -> tuple[int, int]:
     apply_service.request_submit(uow, uid, app_id)
     apply_service.confirm_submitted(uow, uid, app_id)  # writes external_applications + audit
     playbooks.report_playbook_result(uow, uid, "weworkremotely", "success", {"ok": 1})
+    autopilot.put_policy(uow, uid, min_score=70, max_per_day=2)  # autopilot_policy row
+    auth_session.issue_session(
+        uow, uid, secret="privacy-test-secret", now=datetime.now(UTC)
+    )  # sessions row
     uow.commit()
     return uid, fid
 

@@ -25,7 +25,8 @@ def two_users():
         pytest.skip("TEST_POSTGRES_URL not set")
     admin = pg_support.admin_connect()
     admin.execute(
-        "TRUNCATE playbook_reports, applications, generated_assets, explore_findings,"
+        "TRUNCATE autopilot_policy, sessions, playbook_reports, applications,"
+        " generated_assets, explore_findings,"
         " external_applications, style_profile, achievements, profiles, audit_log, users"
         " RESTART IDENTITY CASCADE"
     )

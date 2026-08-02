@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -255,6 +255,22 @@ CREATE INDEX idx_sessions_user ON sessions(user_id);
 ALTER TABLE applications ADD COLUMN submit_approved_at TEXT;
 ALTER TABLE applications ADD COLUMN submit_approved_via TEXT;
 """,
+    # autopilot L2 (S7.2b, ADR 0005): the recorded autopilot policy. Append-only
+    # — a PUT inserts a new row and revokes the prior active one; revocation
+    # sets revoked_at. Active = newest row with revoked_at IS NULL. Written
+    # ONLY by services/autopilot.py behind the session-authenticated API.
+    11: """
+CREATE TABLE autopilot_policy (
+  id          INTEGER PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id),
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  min_score   INTEGER NOT NULL,
+  max_per_day INTEGER NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  revoked_at  TEXT
+);
+CREATE INDEX idx_autopilot_policy_user ON autopilot_policy(user_id);
+""",
 }
 
 # Migrations whose script recreates a table that FK children reference; these
@@ -274,6 +290,7 @@ _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "008_magic_link_tokens.sql": 8,
     "009_sessions.sql": 9,
     "010_applications_submit_approval.sql": 10,
+    "011_autopilot_policy.sql": 11,
 }
 
 

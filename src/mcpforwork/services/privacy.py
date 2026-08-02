@@ -21,6 +21,7 @@ from mcpforwork.services.briefs import ASSET_TYPES
 _USER_TABLES: tuple[str, ...] = (
     "sessions",
     "audit_log",
+    "autopilot_policy",
     "playbook_reports",
     "applications",
     "generated_assets",

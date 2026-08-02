@@ -27,6 +27,7 @@ from mcpforwork.services import apply as apply_service
 from mcpforwork.services import (
     assets,
     audit,
+    autopilot,
     briefs,
     coverage,
     dedup,
@@ -370,6 +371,30 @@ def pipeline_stats() -> str:
     with _tenant_uow() as (uow, user_id):
         stats = pipeline.pipeline_stats(uow, user_id)
     return _ok("pipeline_stats", stats)
+
+
+# --------------------------------------------------------------------------- #
+# Autopilot tools — READ-ONLY (ADR 0005: policy/approval writes live behind
+# the human-session API; no MCP tool can ever mint or revoke consent)
+# --------------------------------------------------------------------------- #
+@mcp.tool()
+def get_autopilot_policy() -> str:
+    """The active autopilot (L2) policy: min_score, max_per_day, since when.
+    null policy = autopilot off, every submit awaits the human. Policies are
+    written ONLY from the dashboard (human session) — never here."""
+    with _tenant_uow() as (uow, user_id):
+        policy = autopilot.get_policy(uow, user_id)
+    return _ok("get_autopilot_policy", {"policy": policy})
+
+
+@mcp.tool()
+def autopilot_queue() -> str:
+    """The L2 work queue: approved matches on auto_apply_safe boards scoring
+    at/above the policy min, not dedup-blocked, with no open application.
+    Empty when autopilot is off or no board is flagged safe. Read-only."""
+    with _tenant_uow() as (uow, user_id):
+        result = autopilot.queue(uow, user_id)
+    return _ok("autopilot_queue", result)
 
 
 # --------------------------------------------------------------------------- #

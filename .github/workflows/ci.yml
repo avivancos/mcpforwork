@@ -43,11 +43,16 @@ jobs:
       - name: Consent-write gate (ADR 0005)
         # Consent artifacts are written exclusively by services/autopilot.py
         # behind the human-session API — never by the MCP entrypoint or any
-        # other module. The write statement outside that one file (schema and
-        # migrations define the columns; they never write them) fails the build.
+        # other module. A write statement outside that one file (schema and
+        # migrations define the tables/columns; they never write them) fails
+        # the build. Covers the L1 approval write and the L2 policy writes.
         run: |
           if grep -RIn --include='*.py' 'SET submit_approved_at' src/mcpforwork/ | grep -v '^src/mcpforwork/services/autopilot.py'; then
             echo "consent gate violated: approval write found outside services/autopilot.py"
+            exit 1
+          fi
+          if grep -RInE --include='*.py' '(INSERT INTO autopilot_policy|UPDATE autopilot_policy)' src/mcpforwork/ | grep -v '^src/mcpforwork/services/autopilot.py'; then
+            echo "consent gate violated: policy write found outside services/autopilot.py"
             exit 1
           fi
 

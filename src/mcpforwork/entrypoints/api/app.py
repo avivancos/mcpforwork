@@ -385,6 +385,47 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
             request, lambda u, uid, fid: review.discard_match(u, uid, fid, reason)
         )
 
+    # --- Autopilot policy (L2 consent writes — ADR 0005: human session only) #
+
+    async def get_policy_route(request: Request) -> Response:
+        with _authed(request) as (uow, auth):
+            if auth is None:
+                return _unauthorized()
+            return _JSON({"policy": autopilot.get_policy(uow, auth["uid"])})
+
+    async def put_policy_route(request: Request) -> Response:
+        """L2 consent write: record a new autopilot policy. The ONLY place a
+        policy is minted — the MCP entrypoint has read-only policy tools."""
+        with _authed(request) as (uow, auth):
+            if auth is None:
+                return _unauthorized()
+            try:
+                body = await request.json()
+            except Exception:
+                return _JSON({"error": "invalid request"}, status_code=400)
+            if not isinstance(body, dict):
+                return _JSON({"error": "invalid request"}, status_code=400)
+            min_score, max_per_day = body.get("min_score"), body.get("max_per_day")
+            if not isinstance(min_score, int) or not isinstance(max_per_day, int):
+                return _JSON(
+                    {"error": "min_score and max_per_day are required integers"}, status_code=400
+                )
+            response = _action_response(
+                autopilot.put_policy(uow, auth["uid"], min_score=min_score, max_per_day=max_per_day)
+            )
+            if response.status_code == 204:
+                uow.commit()
+            return response
+
+    async def revoke_policy_route(request: Request) -> Response:
+        with _authed(request) as (uow, auth):
+            if auth is None:
+                return _unauthorized()
+            response = _action_response(autopilot.revoke_policy(uow, auth["uid"]))
+            if response.status_code == 204:
+                uow.commit()
+            return response
+
     async def restore_match_route(request: Request) -> Response:
         return await _match_action(request, review.restore_match)
 
@@ -561,6 +602,9 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         Route("/v1/matches/{id}", get_match_route, methods=["GET"]),
         Route("/v1/matches/{id}/approve", approve_match_route, methods=["POST"]),
         Route("/v1/applications/{id}/approve-submit", approve_submit_route, methods=["POST"]),
+        Route("/v1/autopilot/policy", get_policy_route, methods=["GET"]),
+        Route("/v1/autopilot/policy", put_policy_route, methods=["PUT"]),
+        Route("/v1/autopilot/policy/revoke", revoke_policy_route, methods=["POST"]),
         Route("/v1/matches/{id}/discard", discard_match_route, methods=["POST"]),
         Route("/v1/matches/{id}/restore", restore_match_route, methods=["POST"]),
         Route("/v1/matches/{id}/outcome", record_outcome_route, methods=["POST"]),

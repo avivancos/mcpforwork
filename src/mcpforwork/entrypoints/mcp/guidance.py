@@ -23,8 +23,15 @@ SERVER_INSTRUCTIONS = (
     "3. /review — approve_match or discard_match with the human.\n"
     "4. /apply — get_generation_brief → draft → submit_asset → ats_coverage_check "
     "→ start_application → execute steps via report_apply_progress / resolve_field "
-    "→ request_submit (await_human at L0) → the HUMAN clicks Submit → "
-    "confirm_submitted. Never click Submit yourself.\n\n"
+    "→ request_submit → its decision rules who clicks Submit:\n"
+    "   • await_human (L0, the default) — the HUMAN clicks Submit; never you.\n"
+    "   • any other decision — the submit IS authorized, exactly once: level 1 "
+    "means the human approved THIS application in the dashboard; level 2 means "
+    "their recorded autopilot policy covers this board/score within the daily "
+    "cap. The response's instruction field says which. Click Submit once, then "
+    "confirm_submitted. autopilot_queue lists what a policy covers; "
+    "get_autopilot_policy shows it. You can NEVER create or change a policy — "
+    "only the human can, in the dashboard.\n\n"
     "Always follow each response's next_action. Never claim anything the "
     "profile does not support. Never invent screener answers (use resolve_field). "
     "Captchas/login/2FA → pause for the human."
@@ -69,7 +76,18 @@ _NEXT_ACTIONS: dict[str, str] = {
     "resolve_field": ("Use the answer as given; on ask_user, ask the human then save_form_answer."),
     "save_form_answer": "Answer saved — fill the field and continue the steps.",
     "request_submit": (
-        "Show the human the filled form; THEY click Submit. Then confirm_submitted."
+        "Follow the decision: await_human → the HUMAN clicks Submit; any other "
+        "decision → the submit is authorized once — click Submit, then "
+        "confirm_submitted."
+    ),
+    "get_autopilot_policy": (
+        "policy null = autopilot off (every submit awaits the human). With an "
+        "active policy, autopilot_queue lists the matches it covers."
+    ),
+    "autopilot_queue": (
+        "Work the queue top-down: start_application per item; request_submit "
+        "authorizes (L2) or awaits the human. The queue is a read — only the "
+        "human changes the policy, in the dashboard."
     ),
     "abandon_application": "Closed. start_application again to retry, or back to /review.",
     "export_my_data": "Your full data export. Save it somewhere safe.",
