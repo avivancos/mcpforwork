@@ -283,24 +283,69 @@ def resolve_field(
 OUTCOMES = frozenset({"no_reply", "rejected", "interview", "offer", "hired"})
 
 
+def _authorize_l1(uow: UnitOfWork, user_id: int, app: dict[str, Any]) -> dict[str, Any]:
+    """Turn a recorded L1 approval into a one-time authorization (S7.2a).
+
+    The consent_level 0 → 1 flip is what makes the authorization exactly-once:
+    a retried call re-reads consent_level 1 and re-returns the directive
+    without writing a second authorization event."""
+    instruction = (
+        "The human approved THIS application's submit in the dashboard. Click "
+        "Submit once, in the already-open form, then call "
+        "confirm_submitted(application_id, evidence)."
+    )
+    if app["consent_level"] == 0:
+        # Atomic flip: the WHERE clause makes exactly-once hold even under
+        # concurrent request_submit transactions — the loser matches 0 rows
+        # and must not write a second authorization event.
+        cur = uow.execute(
+            "UPDATE applications SET consent_level = 1, updated_at = ?"
+            " WHERE id = ? AND user_id = ? AND consent_level = 0",
+            (utcnow_iso(), app["id"], user_id),
+        )
+        if cur.rowcount == 1:
+            audit.record(
+                uow,
+                user_id,
+                "submit_authorized",
+                {
+                    "application_id": app["id"],
+                    "level": 1,
+                    "approved_at": app["submit_approved_at"],
+                    "approved_via": app["submit_approved_via"],
+                },
+            )
+    return {
+        "decision": "submit_authorized",
+        "instruction": instruction,
+        "application_id": app["id"],
+    }
+
+
 def request_submit(
     uow: UnitOfWork, user_id: int, application_id: int, summary: str = ""
 ) -> dict[str, Any]:
     """THE consent gate — the only path toward submission.
 
-    Consent level 0 (the only level until the S7 autopilot card): the decision
-    is ALWAYS `await_human`. The client shows the filled form; the human clicks
-    Submit themselves, then the client calls confirm_submitted."""
+    Without a recorded consent artifact the decision is ALWAYS `await_human`:
+    the client shows the filled form; the human clicks Submit themselves, then
+    the client calls confirm_submitted. L1 (S7.2a, ADR 0005): an approval
+    recorded through the human-session API turns a re-entry into a one-time
+    `submit_authorized`. The MCP entrypoint can never write that approval."""
     app = _load_application(uow, user_id, application_id)
     if app is None:
         return {"error": f"application {application_id} not found"}
-    if not can_transition(app["state"], "submit_requested"):
+    reentry = app["state"] == "submit_requested"
+    if not reentry and not can_transition(app["state"], "submit_requested"):
         return {"error": f"application is '{app['state']}' — finish the steps first"}
-    uow.execute(
-        "UPDATE applications SET state = 'submit_requested', updated_at = ?"
-        " WHERE id = ? AND user_id = ?",
-        (utcnow_iso(), application_id, user_id),
-    )
+    if not reentry:
+        uow.execute(
+            "UPDATE applications SET state = 'submit_requested', updated_at = ?"
+            " WHERE id = ? AND user_id = ?",
+            (utcnow_iso(), application_id, user_id),
+        )
+    if app["submit_approved_at"] is not None:
+        return _authorize_l1(uow, user_id, app)
     audit.record(
         uow,
         user_id,
@@ -342,7 +387,8 @@ def confirm_submitted(
         uow,
         user_id,
         url=match["url"],
-        channel="browser_supervised",
+        # L1-authorized submits are distinguished in the record (S7.2a).
+        channel="browser_autopilot_l1" if app["consent_level"] == 1 else "browser_supervised",
         title=match.get("title") or "",
         company_name=match.get("company_name") or "",
         finding_id=app["finding_id"],

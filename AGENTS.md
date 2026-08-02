@@ -16,9 +16,11 @@ The full product specification lives in
 1. **The LLM is the client.** No server-side LLM calls, ever. No
    `openai`/`anthropic` SDK importable from `domain/`, `services/`, `ports/`,
    or `packs/` — enforced by import-linter in CI.
-2. **Graduated autonomy, consent-based.** No submit-class action is ever
-   emitted without a recorded consent check: `request_submit` is the only
-   place a submit step can be constructed. Supervised (L0) is the default.
+2. **Graduated autonomy, consent-based.** Never submit without a recorded
+   consent check: `request_submit` is the only place a submit directive can
+   be issued, and consent artifacts (L1 approval, L2 policy) are written
+   exclusively by the human-session HTTP API — never by an MCP tool
+   (ADR 0005). Supervised (L0) is the default.
 3. **Open-core.** Every feature works self-hosted on SQLite with no account.
    Hosted-only concerns (Postgres/RLS, Stripe, mailer) live behind ports.
 4. **Never fabricate.** Every generation brief includes a facts inventory;

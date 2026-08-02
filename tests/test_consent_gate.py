@@ -1,7 +1,9 @@
-"""request_submit L0 consent gate + confirm_submitted + outcomes (S4.3).
+"""request_submit consent gate + confirm_submitted + outcomes (S4.3, evolved S7.2a).
 
-THE invariant: at consent level 0 request_submit ALWAYS awaits the human;
-no code path in this sprint yields submit_authorized.
+THE invariant: without a recorded consent artifact, request_submit ALWAYS
+awaits the human. Consent artifacts are written exclusively by the
+human-session HTTP API (services/autopilot.py), never by the MCP entrypoint
+(ADR 0005). L1: a dashboard approval authorizes one submit, once.
 """
 
 import inspect
@@ -45,12 +47,43 @@ def test_request_submit_at_l0_always_awaits_the_human(uow: SqlUnitOfWork) -> Non
     assert "filled form shown" in audit["detail"]
 
 
-def test_no_source_path_yields_submit_authorized_this_sprint() -> None:
-    # Structural: the string that would authorize a submit exists nowhere in the
-    # service source until the S7 autopilot policy card introduces it with
-    # policy checks.
-    source = inspect.getsource(apply_service)
-    assert "submit_authorized" not in source
+def test_no_approval_means_every_path_awaits_the_human(uow: SqlUnitOfWork) -> None:
+    # L0 default (S7.2a): without a recorded approval, request_submit awaits
+    # the human on first entry AND on every re-entry in submit_requested.
+    uid, _, app_id = _ready_app(uow)
+    first = apply_service.request_submit(uow, uid, app_id, summary="filled form shown")
+    reentry = apply_service.request_submit(uow, uid, app_id)
+    uow.commit()
+    assert first["decision"] == "await_human"
+    assert reentry["decision"] == "await_human"
+
+
+def test_approval_write_sql_lives_only_in_the_autopilot_service() -> None:
+    # ADR 0005: the consent artifact (submit_approved_at) is written exclusively
+    # by services/autopilot.py — the human-session API's service. Any other
+    # module containing the write statement is a consent-gate violation.
+    import mcpforwork.services.autopilot as autopilot_service
+
+    allowed = Path(inspect.getsourcefile(autopilot_service) or "")
+    src_root = Path(__file__).parent.parent / "src" / "mcpforwork"
+    offenders = [
+        p
+        for p in src_root.rglob("*.py")
+        if p != allowed
+        and "adapters/db" not in str(p)  # schema/migrations define the columns
+        and "SET submit_approved_at" in p.read_text()
+    ]
+    assert offenders == []
+
+
+def test_mcp_entrypoint_never_references_the_approval_write() -> None:
+    # ADR 0005: no MCP tool call sequence (possibly prompt-injected by posting
+    # content) may mint consent — the entrypoint must not reference the write.
+    from mcpforwork.entrypoints.mcp import server
+
+    source = inspect.getsource(server)
+    assert "approve_submit" not in source
+    assert "submit_approved_at" not in source
 
 
 def test_request_submit_requires_awaiting_human_state(uow: SqlUnitOfWork) -> None:

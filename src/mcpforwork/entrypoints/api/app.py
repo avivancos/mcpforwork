@@ -37,6 +37,7 @@ from mcpforwork.services import apply as apply_service
 from mcpforwork.services import (
     audit,
     auth_session,
+    autopilot,
     hunt,
     pipeline,
     privacy,
@@ -356,6 +357,24 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
     async def approve_match_route(request: Request) -> Response:
         return await _match_action(request, review.approve_match)
 
+    async def approve_submit_route(request: Request) -> Response:
+        """L1 consent write (ADR 0005) — the ONLY place an approval artifact is
+        minted: human session, state-guarded, tenant-scoped. The MCP entrypoint
+        has no equivalent tool and never will."""
+        try:
+            application_id = int(request.path_params["id"])
+        except (KeyError, ValueError):
+            return _JSON({"error": "not found"}, status_code=404)
+        with _authed(request) as (uow, auth):
+            if auth is None:
+                return _unauthorized()
+            response = _action_response(
+                autopilot.approve_submit(uow, auth["uid"], application_id, via="dashboard")
+            )
+            if response.status_code == 204:
+                uow.commit()
+            return response
+
     async def discard_match_route(request: Request) -> Response:
         reason = ""
         with contextlib.suppress(Exception):
@@ -541,6 +560,7 @@ def create_app(mailer: Mailer | None = None) -> Starlette:
         Route("/v1/pipeline/stats", pipeline_stats_route, methods=["GET"]),
         Route("/v1/matches/{id}", get_match_route, methods=["GET"]),
         Route("/v1/matches/{id}/approve", approve_match_route, methods=["POST"]),
+        Route("/v1/applications/{id}/approve-submit", approve_submit_route, methods=["POST"]),
         Route("/v1/matches/{id}/discard", discard_match_route, methods=["POST"]),
         Route("/v1/matches/{id}/restore", restore_match_route, methods=["POST"]),
         Route("/v1/matches/{id}/outcome", record_outcome_route, methods=["POST"]),

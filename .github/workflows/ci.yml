@@ -40,6 +40,17 @@ jobs:
             exit 1
           fi
 
+      - name: Consent-write gate (ADR 0005)
+        # Consent artifacts are written exclusively by services/autopilot.py
+        # behind the human-session API — never by the MCP entrypoint or any
+        # other module. The write statement outside that one file (schema and
+        # migrations define the columns; they never write them) fails the build.
+        run: |
+          if grep -RIn --include='*.py' 'SET submit_approved_at' src/mcpforwork/ | grep -v '^src/mcpforwork/services/autopilot.py'; then
+            echo "consent gate violated: approval write found outside services/autopilot.py"
+            exit 1
+          fi
+
       - name: No substring error matching in the API entrypoint
         # S6.10: services return structured error kinds; the API maps kinds to
         # status codes. Substring sniffing on error messages fails the build.

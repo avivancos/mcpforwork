@@ -26,7 +26,10 @@ def record(
 ) -> None:
     uow.insert(
         "INSERT INTO audit_log (user_id, action, detail) VALUES (?, ?, ?)",
-        (user_id, action, json.dumps(detail or {})),
+        # default=_iso: a datetime column value (Postgres dialect) inside the
+        # detail dict must not crash the write — normalize at the sink so no
+        # caller can hit this again.
+        (user_id, action, json.dumps(detail or {}, default=_iso)),
     )
 
 

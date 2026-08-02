@@ -29,7 +29,7 @@ _PG_DIR = Path(__file__).parent / "pg"
 
 # The version the base schema establishes plus each migration. Bumped as
 # MIGRATIONS grows.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # version -> SQLite SQL script, applied in ascending order above the database's
 # current `PRAGMA user_version`.
@@ -248,6 +248,13 @@ CREATE TABLE sessions (
 );
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 """,
+    # autopilot L1 (S7.2a, ADR 0005): the recorded human approval for one
+    # application's submit. Written ONLY by services/autopilot.py behind the
+    # session-authenticated API — never by the MCP entrypoint.
+    10: """
+ALTER TABLE applications ADD COLUMN submit_approved_at TEXT;
+ALTER TABLE applications ADD COLUMN submit_approved_via TEXT;
+""",
 }
 
 # Migrations whose script recreates a table that FK children reference; these
@@ -266,6 +273,7 @@ _PG_MIGRATION_VERSIONS: dict[str, int] = {
     "007_playbook_reports.sql": 7,
     "008_magic_link_tokens.sql": 8,
     "009_sessions.sql": 9,
+    "010_applications_submit_approval.sql": 10,
 }
 
 
