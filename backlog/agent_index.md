@@ -72,7 +72,7 @@ A card may move to `done/` only when **all** hold:
    touched module/feature; the full suite is a pre-push gate, not a per-task
    one).
 2. **Fused review gate passed:** the fused reviewer
-   (`.claude/agents/test-code-reviewer.md`) returned PASS on this card's diff —
+   (`.cursor/agents/test-code-reviewer.md`, `model: inherit`) returned PASS on this card's diff —
    including the regression audit (full suite + structural gates green, no
    previous contract/test/gate weakened); no P0/P1 open; every P2/P3
    dispositioned (fixed, follow-up card, or written rejection). See

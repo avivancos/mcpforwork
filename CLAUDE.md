@@ -33,10 +33,11 @@ when you change an obligation, mirror it.
 ## Claude Code specifics
 
 - **Review gate:** the single fused reviewer is
-  [.claude/agents/test-code-reviewer.md](.claude/agents/test-code-reviewer.md)
-  (test audit + code review + regression audit; `model: inherit`). Spawn it on
-  the card's diff; fix P0/P1; rerun it after fixes. Simplicity/security reviews
-  are on-demand, not a gate (ADR 0007).
+  [.cursor/agents/test-code-reviewer.md](.cursor/agents/test-code-reviewer.md)
+  (Cursor canonical; mirrored at `.claude/agents/`; test audit + code review +
+  regression audit; `model: inherit`). Spawn via Task **without** a `model`
+  parameter so Cursor inherits the parent. Fix P0/P1; rerun after fixes.
+  Simplicity/security reviews are on-demand, not a gate (ADR 0007).
 - **Plan first** for non-trivial cards (plan mode); get sign-off before
   writing code.
 - **Before saying "done":** run the `AGENTS.md §8` commands and report what

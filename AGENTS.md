@@ -96,7 +96,8 @@ current + next sprint in `pending/`).
 ## 6. Review gate (single fused reviewer, on-demand extras)
 
 A card may move to `done/` only after the fused reviewer subagent
-[.claude/agents/test-code-reviewer.md](.claude/agents/test-code-reviewer.md)
+[.cursor/agents/test-code-reviewer.md](.cursor/agents/test-code-reviewer.md)
+(Cursor canonical; mirrored at `.claude/agents/` for Claude Code)
 (test audit + code review + regression audit, zero-mocks P0, `model: inherit`)
 returns PASS on the card's diff, no P0/P1 finding remains, and every P2/P3
 finding has a disposition (fixed, follow-up card, or written rejection).
@@ -111,6 +112,9 @@ or breaks any previous contract, test, gate, or process.
   See [ADR 0007](backlog/decisions/0007_single_reviewer_gate.md).
 - If the subagent cannot be spawned, perform one clearly labeled review pass
   with the same contract and disclose the degraded mode.
+- **Spawn rule (Cursor):** omit the Task `model` parameter so the reviewer
+  inherits the parent agent's model (`model: inherit` in the agent
+  frontmatter). Do not pin `composer-*`, `grok-*`, Claude, or GPT.
 
 **Closure semantics:** `done/` = implemented + gate passed · `testing/` =
 verification gates run (full suite + real smoke test, evidence recorded) ·
@@ -120,10 +124,11 @@ written.
 
 **Documentor step (mandatory at close).** After the gate passes and before
 the closing commit, spawn the documentor subagent
-[.claude/agents/documentor.md](.claude/agents/documentor.md) on the card: it
-writes/updates the granular module docs under `docs/` (how the feature was
-developed, invariants, decisions, gotchas) and fixes drift in docs it
-touches. The docs it writes ride the card's closing commit. The index is
+[.cursor/agents/documentor.md](.cursor/agents/documentor.md) (`model: inherit`;
+mirrored at `.claude/agents/`) on the card: it writes/updates the granular
+module docs under `docs/` (how the feature was developed, invariants,
+decisions, gotchas) and fixes drift in docs it touches. The docs it writes
+ride the card's closing commit. The index is
 [docs/README.md](docs/README.md).
 
 ## 7. Commits

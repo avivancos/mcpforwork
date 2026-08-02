@@ -15,12 +15,14 @@ audit so new cards never break previous engineering or processes.
 
 ## Decision
 
-1. **One automatic gate.** `.claude/agents/test-code-reviewer.md` fuses the
-   test-auditor and code-reviewer contracts and adds a mandatory regression
-   audit. A card moves to `done/` only after this reviewer returns PASS on the
-   card's diff (no P0/P1 open; P2/P3 dispositioned).
-2. **`model: inherit`.** The reviewer runs on the same model the main agent is
-   using in Cursor — no pinned external model.
+1. **One automatic gate.** `.cursor/agents/test-code-reviewer.md` (Cursor
+   canonical; mirrored at `.claude/agents/` for Claude Code compatibility)
+   fuses the test-auditor and code-reviewer contracts and adds a mandatory
+   regression audit. A card moves to `done/` only after this reviewer returns
+   PASS on the card's diff (no P0/P1 open; P2/P3 dispositioned).
+2. **`model: inherit` (Cursor default).** The reviewer runs on the same model
+   the main agent is using in Cursor — no pinned external model. When spawning
+   via Task, omit the `model` parameter so Cursor inherits the parent.
 3. **Regression audit is part of the gate (P0).** The reviewer runs the FULL
    suite (not just targeted tests) plus the structural gates (lint-imports,
    ruff, CI consent grep, web no-LLM-deps guard) and fails the card if the
