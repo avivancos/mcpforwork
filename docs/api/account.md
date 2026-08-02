@@ -40,10 +40,13 @@
   billing on self-host.
 - `POST /v1/billing/session` (app.py:511): `{"url": null}` — Stripe is S7.1,
   deferred (hosted track out of scope).
-- `POST /v1/account/export` / `POST /v1/account/delete` (app.py:517-533) →
-  `privacy.export_user_data` / `privacy.delete_user_data`; delete also clears
-  the session cookie so the deleted account can't keep presenting a still-valid
-  signed cookie for its 14-day life.
+- `POST /v1/account/export` / `POST /v1/account/delete` (app.py:601-617,
+  routes :641-643) → `privacy.export_user_data` / `privacy.delete_user_data`;
+  delete also clears the session cookie so the deleted account can't keep
+  presenting a still-valid signed cookie for its 14-day life. S7.2d left the
+  API on the direct erase path deliberately: the dashboard is a human session
+  behind typed confirmation (the human-bound equivalent of the MCP two-step
+  token flow — see `modules/privacy.md`).
 
 **Session store enforcement** — `_current_user` (app.py:190) verifies the
 cookie's `sid` against the `sessions` table on EVERY request: revoked session,

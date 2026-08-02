@@ -5,7 +5,8 @@
 > only — each tool opens a tenant-scoped UnitOfWork, calls a service, and
 > returns JSON with a `next_action` breadcrumb. Built by S2.1; later shaped by
 > S3.x/S4.x tools, the S4.4 `_tenant_uow` simplifier, S6.5 guidance, the
-> S6.8 tenant alignment (ADR 0006), and the S7.2 consent tools.
+> S6.8 tenant alignment (ADR 0006), the S7.2 consent tools, and S7.2d
+> (`delete_my_data` two-step).
 
 ## How it works
 
@@ -52,6 +53,13 @@ and its work queue; `approve_submit` has NO MCP equivalent. A structural test
 entrypoint — no tool sequence, however prompt-injected, can mint consent.
 Writes live behind the human-session API (see `docs/modules/autopilot.md`,
 `docs/api/autopilot.md`).
+
+**Destructive tool is two-step (S7.2d).** `delete_my_data(confirm_token="")`
+(`server.py:626-642`) — empty token → `privacy.request_deletion` (summary +
+minted token); non-empty → `privacy.execute_deletion`. The boolean `confirm`
+parameter is REMOVED. This is friction/auditability for the agent path, not an
+ADR-0005 human-session consent artifact (see `docs/modules/privacy.md`). The
+dashboard `POST /v1/account/delete` still calls `delete_user_data` directly.
 
 **Config.** `src/mcpforwork/config.py` is resolved on every call (never
 cached): `db_url()` (`config.py:21-27`, env `MCPFORWORK_DB_URL`, default

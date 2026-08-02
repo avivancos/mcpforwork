@@ -49,8 +49,18 @@ consent-verb grep fails the build on `submit_authorized` outside
 per-decision directive to the response's `instruction` field — the grep keeps
 full strength.
 
+## Destructive erasure (S7.2d)
+
+`delete_my_data` is two-step. The breadcrumb (`guidance.py:94-98`) tells the
+client: no token → show the human the summary and `confirm_token`; only call
+again with that token if THEY explicitly confirm. The tool docstring
+(`server.py:627-633`) forbids inventing a token. This is friction, not
+ADR-0005 provenance — see `modules/privacy.md`.
+
 ## Tests
 
 `tests/test_mcp_server.py` asserts: every registered tool has a breadcrumb;
 instructions state zero-LLM + never-auto-submit; no stale "later sprint"
 claims; `/apply` prompt names the full orchestration verbs.
+`tests/test_privacy.py` pins the two-step tool signature (no boolean
+`confirm` path).

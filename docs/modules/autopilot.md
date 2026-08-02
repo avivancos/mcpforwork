@@ -112,9 +112,11 @@ fail the build if a consent write appears outside this one file —
   verified CLEAN locally on the card).
 - Gate dispositions (S7.2b card): the atomic `AND consent_level = 0`
   guard's mutant survives the sequential suite — ACCEPTED as defense in
-  depth for concurrent transactions (same pattern L1 ships; concurrency
-  test candidate on S7.2d). Cap count+flip TOCTOU under parallel
-  `request_submit` calls — FOLLOW-UP on S7.2d (serialize count+flip).
+  depth for concurrent transactions (same pattern L1 ships). Cap
+  count+flip TOCTOU under parallel `request_submit` — CLOSED by S7.2d
+  (per-user `UPDATE users SET id = id` before the cap count; deterministic
+  concurrency suite in `tests/test_apply_l2_concurrency.py` — see
+  `modules/apply.md`).
 
 ## Gotchas
 
@@ -135,5 +137,5 @@ fail the build if a consent write appears outside this one file —
   would work on SQLite and fail on psycopg's BOOLEAN column; the live arm
   is what guards this class.
 - **GDPR**: `autopilot_policy` is in `privacy._USER_TABLES`
-  (`services/privacy.py:24`) — export/delete coverage is mandatory for any
+  (`services/privacy.py:28`) — export/delete coverage is mandatory for any
   new personal-data table (invariant §1.6); see `modules/privacy.md`.

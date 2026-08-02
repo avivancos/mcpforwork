@@ -5,9 +5,9 @@
 > `report_apply_progress` is the heartbeat; `request_submit` is THE consent gate
 > (invariant §1.2, §9 P0) — without a recorded consent artifact it always awaits the
 > human; an L1 approval (S7.2a, ADR 0005) or an active L2 policy (S7.2b) turns a
-> re-entry into a one-time `submit_authorized`. Latest first: S7.2b (L2 recorded
-> policy — the write-side module is documented in `modules/autopilot.md`), W6.2
-> (dashboard approval UI — the UI half of L1, documented in `modules/web.md`),
+> re-entry into a one-time `submit_authorized`. Latest first: S7.2d (L2 cap
+> count+flip TOCTOU serialization), S7.2b (L2 recorded policy — write side in
+> `modules/autopilot.md`), W6.2 (dashboard approval UI — `modules/web.md`),
 > S7.2a, S6.0, S4.4–S4.1.
 
 ## How it works
@@ -97,23 +97,30 @@ The human records an autopilot policy (min score, UTC daily cap) via the
 human-session API — the write-side module is `services/autopilot.py`, documented
 in `modules/autopilot.md`. The gate side here:
 
-1. **Evaluation** (:409-423) — with an active policy, the match's score and
+1. **Per-user serialization (S7.2d)** — before the cap count, the L2 branch
+   runs `UPDATE users SET id = id WHERE id = ?` (:420). That no-op self-update
+   takes the user's row write lock (SQLite: database-wide writer lock;
+   Postgres: row lock, then READ COMMITTED re-snapshots the count). Concurrent
+   L2 calls for one user run one-at-a-time; different users never block each
+   other. Chosen over a conditional UPDATE with a COUNT subquery because that
+   subquery would still read a pre-lock snapshot under Postgres READ COMMITTED.
+2. **Evaluation** (:421-429) — with an active policy, the match's score and
    `source_slug` feed `autopilot.evaluate` together with
    `safe_sources` (injectable; defaults to `autopilot.safe_source_slugs()`) and
    `_l2_authorized_today` (:325) — authorizations minted in the current UTC
    CALENDAR day, counted from the audit log's immutable `created_at` with a
    `detail LIKE '%"level": 2%'` text pre-filter both dialects evaluate
    identically (ADR 0001 follow-up, now load-bearing: the day boundary is UTC).
-2. **Authorization** — `_authorize_l2` (:339) mirrors the L1 exactly-once
+3. **Authorization** — `_authorize_l2` (:339) mirrors the L1 exactly-once
    pattern: the ATOMIC `consent_level` 0→2 flip (`UPDATE ... WHERE
    consent_level = 0`, :352-357); only the transaction winning the flip writes
    the `submit_authorized` audit row carrying the criteria snapshot
    `{policy_id, score, source_slug, cap_used}` (:358-364). A retried
    `request_submit` re-returns the directive without a second audit row.
-3. **Refusal** — a failed criterion falls through to `await_human` with
+4. **Refusal** — a failed criterion falls through to `await_human` with
    `reason` naming it (not-safe / below-score / cap-reached); nothing is
    written but the usual `request_submit` audit row.
-4. `confirm_submitted` records channel `browser_autopilot_l2` (:468).
+5. `confirm_submitted` records channel `browser_autopilot_l2` (:468).
 
 ## Design decisions
 
@@ -150,6 +157,14 @@ in `modules/autopilot.md`. The gate side here:
   coverage is enumerated in `modules/autopilot.md`.
 - `tests/test_autopilot_l2_live.py` (live PG) — the L2 loop on the
   TIMESTAMP/BOOLEAN dialect, FORCE-RLS policy isolation, revoke mid-batch.
+- `tests/test_apply_l2_concurrency.py` (S7.2d, 3 tests, real threads + real
+  SQLite) — deterministic TOCTOU killer: T1 holds its transaction open across
+  T2's whole call (two Events, 5s hold) so a second submit counting mid-first
+  is refused by the cap; barrier-synchronized parallel end-state pin (two apps,
+  cap 1 never exceeds); same-application race writes exactly one authorization
+  audit row (atomic `consent_level` guard). Racer connections use
+  `run_migrations=False` and are created in their own thread
+  (`check_same_thread`) — see Gotchas.
 - `tests/test_consent_gate.py` — evolved on S7.2a: the written-to-die
   `test_no_source_path_yields_submit_authorized` was replaced by three stronger ones:
   no approval → every path awaits (:50); approval-write SQL lives only in
@@ -190,12 +205,17 @@ in `modules/autopilot.md`. The gate side here:
   sink so no caller can hit it again.
 - **`verified` has no service transition yet** — seed-only in tests. The authorized
   path writes no `request_submit` audit row: `submit_authorized` supersedes it (ADR 0005, P3).
-- **L2 cap count+flip TOCTOU** (S7.2b P2, follow-up on S7.2d): under PARALLEL
-  `request_submit` calls, N distinct pre-staged applications could each pass the
-  cap check before any flip lands. Single-user self-host makes this unlikely but
-  not impossible (a parallelizing client); S7.2d serializes count+flip. The
-  atomic `AND consent_level = 0` guard is the same-shaped defense in depth L1
-  ships — unobservable in the sequential suite (mutant survives, accepted).
+- **L2 cap count+flip TOCTOU — CLOSED by S7.2d** (`UPDATE users SET id = id`,
+  :420). Mutant probe: removing the lock → interleaved concurrency test fails
+  (2 authorized over cap 1); restored → 3/3 green. The barrier-synchronized
+  parallel test is an end-state pin, not the mutant killer (thread startup
+  dominates microsecond critical sections); the interleaved two-transaction
+  test is the deterministic one.
+- **Concurrency-test handshake trap** (S7.2d): `connect()` runs migrations
+  whose trailer `PRAGMA user_version = N` is a database-header WRITE —
+  connections opened mid-race serialize on that handshake and hide the race.
+  Racer connections must use `run_migrations=False` and be created in their
+  own thread (`check_same_thread`).
 - **A minted L2 authorization is never recalled** — re-entry at
   `consent_level == 2` re-returns the directive with no cap re-check
   (:404-407), and revoking the policy mid-batch stops only NEW authorizations.
